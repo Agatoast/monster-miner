@@ -94,30 +94,37 @@ namespace MonsterMiner.Util
 
             foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
             {
-                var source = renderer.sharedMaterial;
-                if (source == null)
-                    continue;
-
-                var material = template != null ? new Material(template) : new Material(urpLit);
-                var albedo = source.HasProperty("_MainTex") ? source.GetTexture("_MainTex") : null;
-                if (albedo == null && source.HasProperty("_BaseMap"))
-                    albedo = source.GetTexture("_BaseMap");
-
-                if (albedo != null)
+                var sources = renderer.sharedMaterials;
+                var remapped = new Material[sources.Length];
+                for (int i = 0; i < sources.Length; i++)
                 {
-                    if (material.HasProperty("_BaseMap"))
-                        material.SetTexture("_BaseMap", albedo);
-                    else if (material.HasProperty("_MainTex"))
-                        material.SetTexture("_MainTex", albedo);
+                    var source = sources[i];
+                    if (source == null)
+                        continue;
+
+                    var material = template != null ? new Material(template) : new Material(urpLit);
+                    var albedo = source.HasProperty("_MainTex") ? source.GetTexture("_MainTex") : null;
+                    if (albedo == null && source.HasProperty("_BaseMap"))
+                        albedo = source.GetTexture("_BaseMap");
+
+                    if (albedo != null)
+                    {
+                        if (material.HasProperty("_BaseMap"))
+                            material.SetTexture("_BaseMap", albedo);
+                        else if (material.HasProperty("_MainTex"))
+                            material.SetTexture("_MainTex", albedo);
+                    }
+
+                    Color tint = bladeTint ?? (source.HasProperty("_Color") ? source.color : Color.white);
+                    if (material.HasProperty("_BaseColor"))
+                        material.SetColor("_BaseColor", tint);
+                    else if (material.HasProperty("_Color"))
+                        material.color = tint;
+
+                    remapped[i] = material;
                 }
 
-                Color tint = bladeTint ?? (source.HasProperty("_Color") ? source.color : Color.white);
-                if (material.HasProperty("_BaseColor"))
-                    material.SetColor("_BaseColor", tint);
-                else if (material.HasProperty("_Color"))
-                    material.color = tint;
-
-                renderer.sharedMaterial = material;
+                renderer.sharedMaterials = remapped;
             }
         }
 

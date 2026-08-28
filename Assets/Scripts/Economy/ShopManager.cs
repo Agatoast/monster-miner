@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using MonsterMiner.Core;
 using MonsterMiner.Player;
 using MonsterMiner.Data;
@@ -117,6 +117,9 @@ namespace MonsterMiner.Economy
         {
             AddFixedPriceShopEntry(ctx, ctx.Database.caveRatFinderListing);
             AddFixedPriceShopEntry(ctx, ctx.Database.lizardLureListing);
+            AddFixedPriceShopEntry(ctx, ctx.Database.rabbitFinderListing);
+            AddFixedPriceShopEntry(ctx, ctx.Database.caveLizardFinderListing);
+            AddFixedPriceShopEntry(ctx, ctx.Database.salamanderLureListing);
             AddFixedPriceShopEntry(ctx, ctx.Database.phoenixLureListing);
             AddWeaponShopEntry(ctx, ctx.Database.spearListing);
             AddWeaponShopEntry(ctx, ctx.Database.pistolListing);
@@ -133,7 +136,7 @@ namespace MonsterMiner.Economy
 
             bool alreadyOwned = listing.unlockItem != null && PlayerOwnsItem(ctx, listing.unlockItem);
             bool alreadyBought = GetPurchaseCount(listing.upgradeId) >= listing.maxPurchases;
-            bool canBuy = !alreadyOwned && !alreadyBought;
+            bool canBuy = CanPurchaseWeaponListing(ctx, listing, alreadyOwned, alreadyBought);
             if (canBuy && listing.unlockItem != null && !ctx.Inventory.CanAdd(listing.unlockItem, 1))
                 canBuy = false;
 
@@ -143,6 +146,28 @@ namespace MonsterMiner.Economy
                 listing.cost,
                 canBuy,
                 canBuy ? null : alreadyOwned ? "OWNED" : "SOLD"));
+        }
+
+        static bool CanPurchaseWeaponListing(GameContext ctx, ShopUpgradeDefinition listing, bool alreadyOwned, bool alreadyBought)
+        {
+            if (alreadyOwned)
+                return false;
+
+            if (IsRepurchasableBaseSpearListing(listing))
+                return true;
+
+            return !alreadyBought;
+        }
+
+        static bool IsRepurchasableBaseSpearListing(ShopUpgradeDefinition listing) =>
+            listing?.upgradeId == "spear_shop";
+
+        static bool CanRepurchaseWeaponWithoutInventory(GameContext ctx, ShopUpgradeDefinition upgrade)
+        {
+            if (!IsRepurchasableBaseSpearListing(upgrade) || upgrade.unlockItem == null)
+                return false;
+
+            return !PlayerOwnsItem(ctx, upgrade.unlockItem);
         }
 
         void AddFixedPriceShopEntry(GameContext ctx, ShopUpgradeDefinition listing)
@@ -285,7 +310,9 @@ namespace MonsterMiner.Economy
                 return false;
 
             int count = GetPurchaseCount(upgrade.upgradeId);
-            if (upgrade.upgradeType != UpgradeType.PickaxeDamage && count >= upgrade.maxPurchases)
+            if (upgrade.upgradeType != UpgradeType.PickaxeDamage
+                && count >= upgrade.maxPurchases
+                && !CanRepurchaseWeaponWithoutInventory(ctx, upgrade))
                 return false;
 
             if (upgrade.upgradeType == UpgradeType.WeaponUnlock &&
@@ -294,7 +321,7 @@ namespace MonsterMiner.Economy
                 PlayerOwnsItem(ctx, upgrade.unlockItem))
                 return false;
 
-            if (PurchaseAddsToInventory(upgrade) && !ctx.Inventory.CanAdd(upgrade.unlockItem, 1))
+            if (PurchaseAddsToInventory(upgrade) && !ctx.Inventory.CanAddShopPurchase(upgrade.unlockItem))
             {
                 ctx.Hud?.ShowMessage("Inventory Full");
                 return false;
@@ -378,6 +405,12 @@ namespace MonsterMiner.Economy
                 return ctx.Database.caveRatFinderListing;
             if (ctx.Database.lizardLureListing?.upgradeId == entryId)
                 return ctx.Database.lizardLureListing;
+            if (ctx.Database.rabbitFinderListing?.upgradeId == entryId)
+                return ctx.Database.rabbitFinderListing;
+            if (ctx.Database.caveLizardFinderListing?.upgradeId == entryId)
+                return ctx.Database.caveLizardFinderListing;
+            if (ctx.Database.salamanderLureListing?.upgradeId == entryId)
+                return ctx.Database.salamanderLureListing;
             if (ctx.Database.phoenixLureListing?.upgradeId == entryId)
                 return ctx.Database.phoenixLureListing;
             if (ctx.Database.spearListing?.upgradeId == entryId)
@@ -408,8 +441,11 @@ namespace MonsterMiner.Economy
 
         static bool IsFixedPriceListing(ShopUpgradeDefinition upgrade)
         {
-            return upgrade.upgradeId == "cave_rat_finder_shop"
+            return upgrade.upgradeId == "gremlin_finder_shop"
                 || upgrade.upgradeId == "lizard_lure_shop"
+                || upgrade.upgradeId == "rabbit_finder_shop"
+                || upgrade.upgradeId == "cave_lizard_finder_shop"
+                || upgrade.upgradeId == "salamander_finder_shop"
                 || upgrade.upgradeId == "phoenix_lure_shop"
                 || upgrade.upgradeId == "grenade_shop";
         }

@@ -1,4 +1,4 @@
-﻿using MonsterMiner.Core;
+using MonsterMiner.Core;
 using MonsterMiner.Data;
 using MonsterMiner.Inventory;
 using MonsterMiner.UI;
@@ -10,9 +10,13 @@ namespace MonsterMiner.Combat
 {
     public class Monster : MonoBehaviour
     {
+        const float GroundRestOffset = 0.02f;
+
         MonsterDefinition definition;
         float currentHealth;
         float nextAttackTime;
+        float groundOffset = 1f;
+        float spawnHover;
         Transform player;
         Rigidbody rb;
 
@@ -22,19 +26,57 @@ namespace MonsterMiner.Combat
 
         public static Monster Spawn(MonsterDefinition def, Vector3 position)
         {
-            var go = PrimitiveFactory.CreatePrimitive(PrimitiveType.Capsule, position, Vector3.one * def.scale, def.bodyColor, def.displayName);
-            PrimitiveFactory.EnsureRigidbody(go, 2f * def.scale);
-            var monster = go.AddComponent<Monster>();
-            monster.Initialize(def);
+            GameObject go = TryCreatePrefabMonster(def, position)
+                ?? PrimitiveFactory.CreatePrimitive(PrimitiveType.Capsule, position, Vector3.one * def.scale, def.bodyColor, def.displayName);
 
-            var bounds = GameContext.Instance?.CavernBounds;
-            if (bounds != null)
-                CavernInteriorEnforcer.EnsureInsideShell(go, bounds);
+            if (go.GetComponent<Rigidbody>() == null)
+                PrimitiveFactory.EnsureRigidbody(go, 2f * def.scale);
+
+            var monster = go.GetComponent<Monster>() ?? go.AddComponent<Monster>();
+            monster.Initialize(def);
+            monster.BeginSpawnDrop();
+            monster.AlignToGround(position, immediate: true);
+
+            EnforcePlateauShellIfNeeded(go);
+            monster.AlignToGround(go.transform.position, immediate: true);
 
             var body = go.GetComponent<Rigidbody>();
             if (body != null)
                 body.linearVelocity = Vector3.zero;
             return monster;
+        }
+
+        static GameObject TryCreatePrefabMonster(MonsterDefinition def, Vector3 position)
+        {
+            if (def == null || string.IsNullOrEmpty(def.visualPrefabResourcePath))
+                return null;
+
+            if (def.visualPrefabResourcePath == "Models/Creatures/iguana")
+                return IguanaVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
+            if (def.visualPrefabResourcePath == "Models/Creatures/rabbit")
+                return RabbitVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
+            if (def.visualPrefabResourcePath == "Models/Creatures/cave_lizard")
+                return CaveLizardVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
+            if (def.visualPrefabResourcePath == "Models/Creatures/gremlin")
+                return GremlinVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
+            if (def.visualPrefabResourcePath == "Models/Creatures/salamander")
+                return SalamanderVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
+            if (def.visualPrefabResourcePath == "Models/Creatures/pentachick")
+                return PentachickVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
+            var prefab = Resources.Load<GameObject>(def.visualPrefabResourcePath);
+            if (prefab == null)
+                return null;
+
+            var instance = Object.Instantiate(prefab, position, Quaternion.identity);
+            instance.name = def.displayName;
+            instance.transform.localScale = Vector3.one * def.scale;
+            return instance;
         }
 
         void Initialize(MonsterDefinition def)
@@ -49,6 +91,12 @@ namespace MonsterMiner.Combat
                 rb.constraints = RigidbodyConstraints.FreezeRotation;
             }
 
+            Physics.SyncTransforms();
+            float bottomY = FloorAnchor.GetBottomY(gameObject);
+            groundOffset = transform.position.y - bottomY + GroundRestOffset;
+            if (groundOffset < GroundRestOffset)
+                groundOffset = GroundRestOffset;
+
             var ctx = GameContext.Instance;
             if (ctx?.Player != null)
                 player = ctx.Player.transform;
@@ -56,21 +104,56 @@ namespace MonsterMiner.Combat
 
         void TryMove(Vector3 worldDelta)
         {
-            if (worldDelta.sqrMagnitude <= 0f)
-                return;
-
-            if (rb != null)
-                rb.MovePosition(rb.position + worldDelta);
-            else
-                transform.position += worldDelta;
-
-            var bounds = GameContext.Instance?.CavernBounds;
-            if (bounds != null)
-                CavernInteriorEnforcer.EnsureInsideShell(gameObject, bounds);
+            Vector3 next = (rb != null ? rb.position : transform.position) + worldDelta;
+            AlignToGround(next);
         }
 
-        void Update()
+        bool IsPentachick => definition != null && definition.monsterId == "pentachick";
+
+        void BeginSpawnDrop()
         {
+            spawnHover = IsPentachick ? 0f : WorldScale.SpawnDropHeight;
+        }
+
+        void AlignToGround(Vector3 worldPos, bool immediate = false)
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds != null)
+            {
+                var local = bounds.transform.InverseTransformPoint(worldPos);
+                float surfaceY = SampleSurfaceWorldY(bounds, local.x, local.z);
+                worldPos.y = IsPentachick
+                    ? surfaceY + WorldScale.CharacterHeightUnits * 0.5f
+                    : surfaceY + groundOffset + spawnHover;
+            }
+
+            if (rb != null && !immediate)
+            {
+                rb.MovePosition(worldPos);
+                return;
+            }
+
+            if (rb != null)
+                rb.position = worldPos;
+            transform.position = worldPos;
+        }
+
+        static float SampleSurfaceWorldY(CavernBounds bounds, float localX, float localZ)
+        {
+            if (bounds == null)
+                return 0f;
+
+            return CreatureSurfaceSampler.SampleWorldY(bounds, localX, localZ);
+        }
+
+        void FixedUpdate()
+        {
+            if (spawnHover > 0f)
+            {
+                spawnHover = Mathf.Max(0f, spawnHover - WorldScale.Feet(8f) * Time.fixedDeltaTime);
+                AlignToGround(rb != null ? rb.position : transform.position, immediate: true);
+            }
+
             if (player == null)
             {
                 var ctx = GameContext.Instance;
@@ -78,6 +161,9 @@ namespace MonsterMiner.Combat
                     player = ctx.Player.transform;
                 return;
             }
+
+            if (definition == null)
+                return;
 
             if (GameContext.Instance?.IsPlayerDead == true)
             {
@@ -97,13 +183,19 @@ namespace MonsterMiner.Combat
                 return;
             }
 
+            if (definition.attackDamage <= 0f)
+                return;
+
             var dir = toPlayer.normalized;
-            TryMove(dir * definition.moveSpeed * Time.deltaTime);
+            TryMove(dir * GetMoveUnitsPerSecond(definition.moveSpeedMph) * Time.fixedDeltaTime);
             transform.rotation = Quaternion.LookRotation(dir);
 
             if (toPlayer.magnitude <= definition.attackRange && Time.time >= nextAttackTime)
             {
                 nextAttackTime = Time.time + definition.attackCooldown;
+                GetComponent<CaveLizardLocomotion>()?.PlayAttack();
+                GetComponent<GremlinLocomotion>()?.PlayAttack();
+                GetComponent<SalamanderLocomotion>()?.PlayAttack();
                 var health = player.GetComponent<Player.PlayerHealth>();
                 health?.TakeDamage(definition.attackDamage);
                 var playerRb = player.GetComponent<Rigidbody>();
@@ -116,13 +208,57 @@ namespace MonsterMiner.Combat
         {
             var toPlayer = player.position - transform.position;
             toPlayer.y = 0f;
-            var fleeDir = GetFleeTowardWallDirection(toPlayer);
+            var fleeDir = definition.fleesOverPlateauEdge
+                ? GetFleeOverPlateauEdgeDirection(toPlayer)
+                : GetFleeTowardWallDirection(toPlayer);
             if (fleeDir.sqrMagnitude <= 0.001f)
                 return;
 
-            float speed = forceFlee ? definition.moveSpeed * 1.35f : definition.moveSpeed;
-            TryMove(fleeDir * speed * Time.deltaTime);
+            float speedMph = forceFlee ? definition.moveSpeedMph * 1.35f : definition.moveSpeedMph;
+            TryMove(fleeDir * GetMoveUnitsPerSecond(speedMph) * Time.fixedDeltaTime);
             transform.rotation = Quaternion.LookRotation(fleeDir);
+        }
+
+        Vector3 GetFleeOverPlateauEdgeDirection(Vector3 toPlayer)
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds == null)
+                return GetFleeTowardWallDirection(toPlayer);
+
+            Vector3 local = bounds.transform.InverseTransformPoint(transform.position);
+            Vector3 outward = new Vector3(local.x, 0f, local.z);
+            if (outward.sqrMagnitude < 0.0001f)
+                outward = Vector3.forward;
+            outward.Normalize();
+
+            Vector3 outwardWorld = bounds.transform.TransformDirection(outward);
+            Vector3 awayFromPlayer = toPlayer.sqrMagnitude > 0.0001f ? -toPlayer.normalized : outwardWorld;
+            float angle = Mathf.Atan2(local.z, local.x);
+            float edgeDistance = PlateauBoundary.SamplePlateauEdgeDistance(angle, bounds.Radius);
+            float distance = new Vector2(local.x, local.z).magnitude;
+            bool onPlateauTop = PlateauBoundary.IsOnPlateau(local.x, local.z, bounds.Radius)
+                && distance < edgeDistance - WorldScale.Feet(3f);
+
+            float outwardWeight = onPlateauTop ? 0.88f : 0.55f;
+            float awayWeight = 1f - outwardWeight;
+            Vector3 worldDir = (outwardWorld * outwardWeight + awayFromPlayer * awayWeight).normalized;
+            worldDir.y = 0f;
+            return worldDir.sqrMagnitude > 0.001f ? worldDir.normalized : outwardWorld;
+        }
+
+        static float GetMoveUnitsPerSecond(float mph) => WorldScale.MilesPerHour(mph);
+
+        static void EnforcePlateauShellIfNeeded(GameObject root)
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (root == null || bounds == null)
+                return;
+
+            var local = bounds.transform.InverseTransformPoint(root.transform.position);
+            if (!PlateauBoundary.IsOnPlateau(local.x, local.z, bounds.Radius))
+                return;
+
+            CavernInteriorEnforcer.EnsureInsideShell(root, bounds);
         }
 
         Vector3 GetFleeTowardWallDirection(Vector3 toPlayer)
@@ -172,23 +308,44 @@ namespace MonsterMiner.Combat
             }
 
             if (definition.dropItem != null)
-            {
-                Vector3 dropOrigin = transform.position;
-                dropOrigin += new Vector3(Random.Range(-0.35f, 0.35f), 0f, Random.Range(-0.35f, 0.35f));
-
-                if (!FloorAnchor.TryResolveFloorPoint(dropOrigin, 16f, 32f, out var dropPoint))
-                    dropPoint = dropOrigin;
-
-                var pickup = WorldPickup.Spawn(definition.dropItem, 1, dropPoint);
-                if (pickup != null)
-                {
-                    var contentRoot = GameContext.Instance?.CavernBounds?.transform;
-                    if (contentRoot != null)
-                        pickup.transform.SetParent(contentRoot, true);
-                }
-            }
+                TryGrantOrDropLoot();
 
             Destroy(gameObject);
+        }
+
+        void TryGrantOrDropLoot()
+        {
+            var drop = definition.dropItem;
+            var ctx = GameContext.Instance;
+            if (InventorySystem.IsPentachickHeart(drop)
+                && ctx?.Inventory != null
+                && ctx.Inventory.TryAdd(drop, 1))
+            {
+                ctx.Hud?.ShowMessage("Pentachick Heart added to inventory.");
+                return;
+            }
+
+            Vector3 dropOrigin = transform.position;
+            dropOrigin += new Vector3(Random.Range(-0.35f, 0.35f), 0f, Random.Range(-0.35f, 0.35f));
+
+            if (!FloorAnchor.TryResolveFloorPoint(dropOrigin, 16f, 32f, out var dropPoint))
+                dropPoint = dropOrigin;
+
+            var pickup = WorldPickup.Spawn(drop, 1, dropPoint);
+            if (pickup == null)
+                return;
+
+            var contentRoot = ctx?.CavernBounds?.transform;
+            if (contentRoot != null)
+                pickup.transform.SetParent(contentRoot, true);
+
+            if (InventorySystem.IsPentachickHeart(drop) && ctx?.Inventory != null)
+            {
+                if (ctx.Inventory.ContainsItem(drop))
+                    ctx.Hud?.ShowMessage("Pentachick Heart dropped — only one can be carried.");
+                else
+                    ctx.Hud?.ShowMessage("Inventory full — Pentachick Heart dropped.");
+            }
         }
     }
 }

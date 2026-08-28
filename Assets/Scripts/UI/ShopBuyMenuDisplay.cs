@@ -42,8 +42,7 @@ namespace MonsterMiner.UI
             {
                 var entry = entries[i];
                 var rowRect = new Rect(panelRect.x + 12f, rowY, panelRect.width - 24f, RowHeight - 4f);
-                string prefix = i < 9 ? $"{i + 1}. " : string.Empty;
-                string line = prefix + entry.DisplayLine;
+                string line = entry.DisplayLine;
 
                 if (entry.canPurchase)
                 {
@@ -70,7 +69,7 @@ namespace MonsterMiner.UI
             GUI.color = new Color(0.75f, 0.75f, 0.75f);
             GUI.Label(
                 new Rect(panelRect.x, panelRect.yMax - FooterHeight - 4f, panelRect.width, FooterHeight),
-                "Click or press number to buy · E, Esc, or right-click to close",
+                "Click to buy · E, Esc, or right-click to close",
                 footerStyle);
             GUI.color = Color.white;
         }

@@ -15,6 +15,21 @@ namespace MonsterMiner.Economy
 
         public bool IsCave2Unlocked { get; private set; }
         public bool IsBlastInProgress => blastInProgress;
+        public bool HasMinerWingsPermission { get; private set; }
+        public bool MinerWingsConsumed { get; private set; }
+        public bool CanEquipMinerWings =>
+            HasMinerWingsPermission && !MinerWingsConsumed && !HasPentachickHeartInInventory();
+
+        public static bool HasPentachickHeartInInventory()
+        {
+            var ctx = GameContext.Instance;
+            var heart = ctx?.Database?.pentachickHeartItem;
+            return heart != null && ctx.Inventory != null && ctx.Inventory.ContainsItem(heart);
+        }
+
+        public void GrantMinerWingsPermission() => HasMinerWingsPermission = true;
+
+        public void ConsumeMinerWings() => MinerWingsConsumed = true;
 
         public void BeginBlastSequence()
         {
@@ -29,7 +44,7 @@ namespace MonsterMiner.Economy
             blastInProgress = true;
 
             var ctx = GameContext.Instance;
-            ctx?.Hud?.ShowMessage("The miner blasts the wall!");
+            ctx?.Hud?.ShowMessage("The miner blasts a path to the next cave!");
 
             var shake = ctx?.Player?.GetComponent<PlayerCameraShake>();
             if (shake == null && ctx?.Player != null)

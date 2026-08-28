@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d9e8732f37aaecf47b24f6631b6cc4ed
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 230325
+  packageName: M67 Grenade
+  packageVersion: 1.0
+  assetPath: Assets/M67/Materials/M67 modern.mat
+  uploadId: 524687

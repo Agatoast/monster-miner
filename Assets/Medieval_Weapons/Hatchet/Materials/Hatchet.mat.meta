@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 50ab85b337b40994ea45bba151d443b3
+timeCreated: 1478093663
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 75299
+  packageName: Medieval Weapons PBR Pack
+  packageVersion: 1.0
+  assetPath: Assets/Medieval_Weapons/Hatchet/Materials/Hatchet.mat
+  uploadId: 195359

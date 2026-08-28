@@ -8,7 +8,7 @@ namespace MonsterMiner.Data
         public string monsterId;
         public string displayName;
         public float maxHealth = 20f;
-        public float moveSpeed = 3f;
+        public float moveSpeedMph = 11f;
         public float attackDamage = 8f;
         public float attackRange = 1.6f;
         public float attackCooldown = 1.2f;
@@ -22,5 +22,7 @@ namespace MonsterMiner.Data
         [Range(0f, 1f)]         public float spawnWeight = 1f;
         public bool isQuestBoss;
         public bool fleesFromPlayer;
+        public bool fleesOverPlateauEdge;
+        public string visualPrefabResourcePath;
     }
 }

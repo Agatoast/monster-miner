@@ -9,18 +9,24 @@ namespace MonsterMiner.Economy
         const string QuestPrompt =
             "I need your help! I have been mining here for years and I am so close to breaking into the motherlode.\n\n"
             + "I think there is another cave on the other side of this wall but I need something to blast through.\n\n"
-            + "Bring me the Heart of the Phoenix.";
+            + "Bring me the Heart of the Pentachick.";
 
-        const string GiveFinderPrompt = "Give Miner the Phoenix Egg Finder";
-        const string CaveOpenPrompt = "The blast opened the way to Cave 2.";
+        const string GiveFinderPrompt = "Give Miner the Heart of the Pentachick";
+        const string WingsPermissionPrompt =
+            "Thank you, take the wings and feel free to use my motorcycle down below.";
+        const string WingsSpentPrompt = "Those wings will not lift you again.";
 
         public string GetDialogueBody()
         {
             var ctx = GameContext.Instance;
-            if (ctx?.CaveProgression != null && ctx.CaveProgression.IsCave2Unlocked)
-                return CaveOpenPrompt;
+            var progression = ctx?.CaveProgression;
+            if (progression != null && progression.MinerWingsConsumed)
+                return WingsSpentPrompt;
 
-            if (HasPhoenixLure(ctx))
+            if (progression != null && progression.HasMinerWingsPermission)
+                return WingsPermissionPrompt;
+
+            if (HasPentachickHeart(ctx))
                 return GiveFinderPrompt;
 
             return QuestPrompt;
@@ -29,19 +35,21 @@ namespace MonsterMiner.Economy
         public bool ShouldShowInteractPrompt()
         {
             var ctx = GameContext.Instance;
-            if (ctx?.CaveProgression != null && ctx.CaveProgression.IsCave2Unlocked)
+            if (ctx?.CaveProgression != null
+                && (ctx.CaveProgression.HasMinerWingsPermission || ctx.CaveProgression.IsCave2Unlocked))
                 return true;
 
-            return HasPhoenixLure(ctx);
+            return HasPentachickHeart(ctx);
         }
 
         public bool ShouldHighlightPhoenixHeart()
         {
             var ctx = GameContext.Instance;
-            if (ctx?.CaveProgression != null && ctx.CaveProgression.IsCave2Unlocked)
+            if (ctx?.CaveProgression != null
+                && (ctx.CaveProgression.HasMinerWingsPermission || ctx.CaveProgression.IsCave2Unlocked))
                 return false;
 
-            return !HasPhoenixLure(ctx);
+            return !HasPentachickHeart(ctx);
         }
 
         public string GetPrompt()
@@ -62,26 +70,30 @@ namespace MonsterMiner.Economy
             if (ctx?.CaveProgression == null)
                 return;
 
-            if (ctx.CaveProgression.IsCave2Unlocked)
-            {
-                ctx.Hud?.ShowMessage("Cave 2 lies through the blasted wall.");
-                return;
-            }
-
             if (ctx.CaveProgression.IsBlastInProgress)
                 return;
 
-            if (!HasPhoenixLure(ctx))
-                return;
-
-            var lure = ctx.Database?.phoenixLureItem;
-            if (lure == null || !ctx.Inventory.TryRemove(lure, 1))
+            if (ctx.CaveProgression.HasMinerWingsPermission)
             {
-                ctx.Hud?.ShowMessage("You need a Phoenix Egg Finder.");
+                ctx.Hud?.ShowMessage(
+                    ctx.CaveProgression.MinerWingsConsumed
+                        ? "Those wings will not lift you again."
+                        : "Take the wings and glide down below.");
                 return;
             }
 
-            ctx.CaveProgression.BeginBlastSequence();
+            if (!HasPentachickHeart(ctx))
+                return;
+
+            var heart = ctx.Database?.pentachickHeartItem;
+            if (heart == null || !ctx.Inventory.TryRemove(heart, 1))
+            {
+                ctx.Hud?.ShowMessage("You need the Heart of the Pentachick.");
+                return;
+            }
+
+            ctx.CaveProgression.GrantMinerWingsPermission();
+            ctx.Hud?.ShowMessage(WingsPermissionPrompt);
         }
 
         public bool TryGetDialogueAnchorScreenPoint(Camera camera, out Vector2 guiPoint)
@@ -107,20 +119,13 @@ namespace MonsterMiner.Economy
             return InteractionPromptBoundsUtility.TryGetColliderScreenRect(camera, collider, out guiRect);
         }
 
-        static bool HasPhoenixLure(GameContext ctx)
+        static bool HasPentachickHeart(GameContext ctx)
         {
-            var lure = ctx?.Database?.phoenixLureItem;
-            if (lure == null || ctx.Inventory == null)
+            var heart = ctx?.Database?.pentachickHeartItem;
+            if (heart == null || ctx.Inventory == null)
                 return false;
 
-            int total = 0;
-            foreach (var slot in ctx.Inventory.Slots)
-            {
-                if (!slot.IsEmpty && slot.item == lure)
-                    total += slot.count;
-            }
-
-            return total > 0;
+            return ctx.Inventory.ContainsItem(heart);
         }
     }
 }

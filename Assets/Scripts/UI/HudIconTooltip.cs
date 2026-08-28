@@ -6,6 +6,19 @@ namespace MonsterMiner.UI
     {
         static GUIStyle tooltipStyle;
 
+        public static void DrawNumericRemainingIfHovered(Rect iconRect, float current, float max)
+        {
+            if (max <= 0f || Event.current == null)
+                return;
+
+            if (!iconRect.Contains(Event.current.mousePosition))
+                return;
+
+            int currentValue = Mathf.CeilToInt(current);
+            int maxValue = Mathf.CeilToInt(max);
+            DrawBelow(iconRect, $"{currentValue} / {maxValue}");
+        }
+
         public static void DrawPercentRemainingIfHovered(Rect iconRect, float current, float max)
         {
             if (max <= 0f || Event.current == null)

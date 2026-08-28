@@ -1,3 +1,4 @@
+using MonsterMiner.Inventory;
 using UnityEngine;
 
 namespace MonsterMiner.World
@@ -29,8 +30,10 @@ namespace MonsterMiner.World
                 return true;
 
             Vector3 local = bounds.transform.InverseTransformPoint(worldPosition);
+            float angle = Mathf.Atan2(local.z, local.x);
+            float maxCenterDistance = PlateauBoundary.SampleBarrierDistance(angle, bounds.Radius) - ShellInset;
             float centerDistance = new Vector2(local.x, local.z).magnitude;
-            return centerDistance + horizontalRadius <= bounds.Radius - ShellInset;
+            return centerDistance + horizontalRadius <= maxCenterDistance;
         }
 
         public static void EnsureInsideShell(GameObject root, CavernBounds bounds)
@@ -48,7 +51,9 @@ namespace MonsterMiner.World
             Vector3 local = bounds.transform.InverseTransformPoint(root.transform.position);
             Vector2 flat = new Vector2(local.x, local.z);
             float centerDistance = flat.magnitude;
-            float maxCenterDistance = Mathf.Max(0f, bounds.Radius - ShellInset - horizontalRadius);
+            float angle = Mathf.Atan2(local.z, local.x);
+            float plateauEdge = PlateauBoundary.SampleBarrierDistance(angle, bounds.Radius);
+            float maxCenterDistance = Mathf.Max(0f, plateauEdge - ShellInset - horizontalRadius);
             if (centerDistance <= maxCenterDistance)
                 return;
 
@@ -65,7 +70,7 @@ namespace MonsterMiner.World
 
             foreach (var renderer in contentRoot.GetComponentsInChildren<Renderer>(true))
             {
-                if (renderer == null || IsShellRenderer(renderer))
+                if (renderer == null || IsShellRenderer(renderer) || IsPlateauWorldContent(renderer))
                     continue;
 
                 Vector3 local = bounds.transform.InverseTransformPoint(renderer.bounds.center);
@@ -76,13 +81,28 @@ namespace MonsterMiner.World
             }
         }
 
+        static bool IsPlateauWorldContent(Renderer renderer)
+        {
+            return renderer.GetComponentInParent<MonsterEgg>() != null
+                || renderer.GetComponentInParent<WorldPickup>() != null
+                || renderer.GetComponentInParent<EggFinderMarker>() != null;
+        }
+
         static bool IsShellRenderer(Renderer renderer)
         {
             var transform = renderer.transform;
             while (transform != null)
             {
                 string name = transform.name;
-                if (name == "Floor" || name == "Ceiling" || name == "WallCylinder")
+                if (name == "PlainsGround" || name == "PlainsGroundTopCollision"
+                    || name == "PlainsGroundSolid" || name == "PlainsGroundCollision"
+                    || name == "MinerArea" || name == "MinerNpc"
+                    || name == "AngelWings" || name == "EquippedAngelWings" || name == "LowerWorld"
+                    || name == "LowerPlainsGround" || name == "LowerTreeCopses" || name == "CliffWalls"
+                    || name == "PlateauCliffWalls")
+                    return true;
+                if (name.StartsWith("PlainsGroundCollider_") || name.StartsWith("Tree_") || name.StartsWith("Copse_")
+                    || name.StartsWith("Trunk") || name.StartsWith("Foliage"))
                     return true;
                 transform = transform.parent;
             }

@@ -15,14 +15,25 @@ namespace MonsterMiner.Util
             new Color(0.17f, 0.72f, 0.28f)
         };
 
+        public const int GoldColorIndex = 2;
+
         static Material[] cachedMaterials;
 
         public static void ApplyRandomDragonScaleMaterial(GameObject root)
         {
+            ApplyDragonScaleMaterial(root, Random.Range(0, EggColors.Length));
+        }
+
+        public static void ApplyGoldDragonScaleMaterial(GameObject root)
+        {
+            ApplyDragonScaleMaterial(root, GoldColorIndex);
+        }
+
+        public static void ApplyDragonScaleMaterial(GameObject root, int colorIndex)
+        {
             if (root == null)
                 return;
 
-            int colorIndex = Random.Range(0, EggColors.Length);
             var material = GetDragonScaleMaterial(colorIndex);
             if (material == null)
                 return;

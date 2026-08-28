@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 43e75fb4128fe4d4496875668dacd025
+timeCreated: 1478092172
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 75299
+  packageName: Medieval Weapons PBR Pack
+  packageVersion: 1.0
+  assetPath: Assets/Medieval_Weapons/Shield/Prefab/shield.prefab
+  uploadId: 195359

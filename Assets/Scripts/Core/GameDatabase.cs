@@ -14,6 +14,9 @@ namespace MonsterMiner.Core
         public ShopUpgradeDefinition waterPurchase;
         public ShopUpgradeDefinition knifeMapListing;
         public ShopUpgradeDefinition lizardLureListing;
+        public ShopUpgradeDefinition rabbitFinderListing;
+        public ShopUpgradeDefinition caveLizardFinderListing;
+        public ShopUpgradeDefinition salamanderLureListing;
         public ShopUpgradeDefinition phoenixLureListing;
         public ShopUpgradeDefinition caveRatFinderListing;
         public ItemDefinition pickaxeItem;
@@ -36,7 +39,11 @@ namespace MonsterMiner.Core
         public ShopUpgradeDefinition machinegunListing;
         public ShopUpgradeDefinition grenadeListing;
         public ItemDefinition lizardLureItem;
+        public ItemDefinition rabbitFinderItem;
+        public ItemDefinition caveLizardFinderItem;
+        public ItemDefinition salamanderLureItem;
         public ItemDefinition phoenixLureItem;
+        public ItemDefinition pentachickHeartItem;
         public ItemDefinition caveRatFinderItem;
         public ItemDefinition legendaryWeaponItem;
         public ItemDefinition glovesGray;
@@ -60,11 +67,11 @@ namespace MonsterMiner.Core
             db.knifePurpleItem = MakeKnife("knife_purple", "Purple Knife", 5, new Color(0.65f, 0.25f, 0.95f));
             db.knifeGoldenItem = MakeKnife("knife_golden", "Golden Knife", 6, new Color(1f, 0.82f, 0.15f));
             db.spearItem = MakeWeapon("spear", "Spear", 3, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Spear");
-            db.pistolItem = MakeWeapon("pistol", "Pistol", 4, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Pistol");
-            db.rifleItem = MakeWeapon("rifle", "Rifle", 5, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Rifle");
-            db.shotgunItem = MakeWeapon("shotgun", "Shotgun", 8, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Shotgun");
-            db.machinegunItem = MakeWeapon("machinegun", "Machine Gun", 4, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Machinegun");
-            db.grenadeItem = MakeWeapon("grenade", "Grenade", 12, new Color(0.35f, 0.75f, 0.25f), null, stackLimit: 5);
+            db.pistolItem = MakeWeapon("pistol", "Pistol", 25, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Pistol");
+            db.rifleItem = MakeWeapon("rifle", "Rifle", 200, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Rifle");
+            db.shotgunItem = MakeWeapon("shotgun", "Shotgun", 30, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Shotgun");
+            db.machinegunItem = MakeWeapon("machinegun", "Machine Gun", 40, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Machinegun");
+            db.grenadeItem = MakeWeapon("grenade", "Grenade", 12, new Color(0.35f, 0.75f, 0.25f), "Textures/Inventory/Grenade");
             db.legendaryWeaponItem = MakeItem("legendary_blade", "Legendary Blade", ItemCategory.Weapon, 50, new Color(1f, 0.85f, 0.2f), false);
 
             db.glovesGray = MakeGlove("mining_gloves_gray", "Gray Mining Gloves", 0, new Color(0.55f, 0.55f, 0.58f));
@@ -74,51 +81,72 @@ namespace MonsterMiner.Core
             db.glovesPurple = MakeGlove("mining_gloves_purple", "Purple Mining Gloves", 4, new Color(0.65f, 0.25f, 0.95f));
             db.glovesGold = MakeGlove("mining_gloves_gold", "Gold Mining Gloves", 5, new Color(1f, 0.82f, 0.15f));
 
-            var monsterMeat = MakeItem("monster_meat", "Monster Meat", ItemCategory.Drop, 4, new Color(0.85f, 0.25f, 0.2f), true);
-            monsterMeat.isEdible = true;
-            monsterMeat.iconResourcePath = "Textures/MonsterMeat";
+            var monsterMeat = MakeMeat("monster_meat", 4, "Textures/MonsterMeat");
+            var rabbitMeat = MakeMeat("rabbit_meat", 3, "Textures/Creatures/Meat/rabbit");
+            var iguanaMeat = MakeMeat("iguana_meat", 3, "Textures/Creatures/Meat/iguana");
+            var caveLizardMeat = MakeMeat("cave_lizard_meat", 5, "Textures/Creatures/Meat/cave_lizard");
+            var gremlinMeat = MakeMeat("gremlin_meat", 7, "Textures/Creatures/Meat/gremlin");
+            var salamanderMeat = MakeMeat("salamander_meat", 9, "Textures/Creatures/Meat/salamander");
             var core = MakeItem("rare_core", "Rare Core", ItemCategory.Drop, 12, new Color(0.3f, 0.9f, 1f), true);
             core.isEdible = true;
             var caveKey = MakeItem("cave_key", "Cave Key", ItemCategory.Key, 25, new Color(1f, 0.75f, 0.1f), true);
             var pebble = MakeItem("shiny_pebble", "Shiny Pebble", ItemCategory.Misc, 1, new Color(1f, 0.85f, 0.25f), false);
-            pebble.stackLimit = 1;
             var ore = MakeItem("ore", "Ore", ItemCategory.Ore, 2, new Color(0.5f, 0.45f, 0.4f), false);
-            var caveRatFinder = MakeItem("cave_rat_finder", "Cave Rat Egg Finder", ItemCategory.Misc, 2, new Color(0.45f, 0.4f, 0.35f), false);
-            var lizardLure = MakeItem("lizard_lure", "Lizard Egg Finder", ItemCategory.Misc, 5, new Color(0.35f, 0.75f, 0.3f), false);
-            var phoenixLure = MakeItem("phoenix_lure", "Phoenix Egg Finder", ItemCategory.Misc, 25, new Color(1f, 0.45f, 0.1f), false);
+            var gremlinFinder = MakeFinder("gremlin_finder", "Gremlin Finder", 2, new Color(0.72f, 0.38f, 0.58f), "gremlin", EggFinderRarity.Common, 3, 5);
+            var lizardLure = MakeFinder("lizard_lure", "Iguana Finder", 0, new Color(0.35f, 0.75f, 0.3f), "iguana", EggFinderRarity.Common, 3, 5);
+            var rabbitFinder = MakeFinder("rabbit_finder", "Rabbit Finder", 0, new Color(0.82f, 0.78f, 0.72f), "rabbit", EggFinderRarity.Common, 3, 5);
+            var caveLizardFinder = MakeFinder("cave_lizard_finder", "Cave Lizard Finder", 1, new Color(0.62f, 0.48f, 0.28f), "cave_lizard", EggFinderRarity.Common, 3, 5);
+            var salamanderFinder = MakeFinder("salamander_finder", "Salamander Finder", 5, new Color(0.82f, 0.34f, 0.18f), "salamander", EggFinderRarity.Uncommon, 1, 35);
+            var phoenixLure = MakeFinder("phoenix_lure", "Pentachick Finder", 50, new Color(1f, 0.45f, 0.1f), "pentachick", EggFinderRarity.Rare, 1, 2);
+            var pentachickHeart = MakeItem("pentachick_heart", "Pentachick Heart", ItemCategory.Key, 0, new Color(1f, 0.35f, 0.12f), true);
+            pentachickHeart.canBeSold = false;
 
             db.items.AddRange(new[]
             {
                 db.pickaxeItem, db.clubItem, db.knifeItem, db.knifeGreenItem, db.knifeBlueItem, db.knifePurpleItem, db.knifeGoldenItem,
                 db.spearItem, db.pistolItem, db.rifleItem, db.shotgunItem, db.machinegunItem, db.grenadeItem, db.legendaryWeaponItem,
                 db.glovesGray, db.glovesWhite, db.glovesGreen, db.glovesBlue, db.glovesPurple, db.glovesGold,
-                monsterMeat, core, caveKey, pebble, ore, caveRatFinder, lizardLure, phoenixLure
+                monsterMeat, rabbitMeat, iguanaMeat, caveLizardMeat, gremlinMeat, salamanderMeat,
+                core, caveKey, pebble, ore, gremlinFinder, lizardLure, rabbitFinder, caveLizardFinder, salamanderFinder, phoenixLure, pentachickHeart
             });
 
-            db.monsters.Add(MakeMonster("swarmer", "Weak Swarmer", 12f, 4.5f, 5f, 0.8f, Color.green, monsterMeat, 0.45f, flees: true));
-            db.monsters.Add(MakeMonster("brawler", "Average Brawler", 24f, 3.2f, 8f, 1f, Color.yellow, monsterMeat, 0.35f));
-            db.monsters.Add(MakeMonster("attacker", "Strong Attacker", 40f, 2.4f, 14f, 1.35f, Color.red, monsterMeat, 0.15f));
-            db.monsters.Add(MakeMonster("exploder", "Rare Exploder", 30f, 2.8f, 10f, 1.1f, new Color(1f, 0.4f, 0.1f), core, 0.04f, explodes: true));
-            db.monsters.Add(MakeMonster("quest_boss", "Quest Monster", 80f, 2f, 16f, 1.6f, new Color(0.6f, 0.1f, 0.8f), caveKey, 0.01f, boss: true));
+            db.monsters.Add(MakeMonster("iguana", "Iguana", 9f, 12f, 0f, 1f, new Color(0.42f, 0.68f, 0.34f), iguanaMeat, 0f, flees: true, fleeOverEdge: true, prefabPath: "Models/Creatures/iguana"));
+            db.monsters.Add(MakeMonster("rabbit", "Rabbit", 8f, 13f, 0f, 0.85f, new Color(0.82f, 0.78f, 0.72f), rabbitMeat, 0f, flees: true, fleeOverEdge: true, prefabPath: "Models/Creatures/rabbit"));
+            db.monsters.Add(MakeMonster("cave_lizard", "Cave Lizard", 10f, 11f, 5f, 2f, new Color(0.58f, 0.42f, 0.22f), caveLizardMeat, 0f, prefabPath: "Models/Creatures/cave_lizard"));
+            db.monsters.Add(MakeMonster("gremlin", "Gremlin", 11f, 12f, 7f, 1.8f, new Color(0.68f, 0.32f, 0.52f), gremlinMeat, 0f, prefabPath: "Models/Creatures/gremlin"));
+            db.monsters.Add(MakeMonster("salamander", "Salamander", 22f, 11f, 9f, 2f, new Color(0.78f, 0.36f, 0.16f), salamanderMeat, 0f, prefabPath: "Models/Creatures/salamander"));
+            db.monsters.Add(MakeMonster("pentachick", "Pentachick", 50f, 12f, 15f, 1f, new Color(1f, 0.45f, 0.1f), pentachickHeart, 0f, boss: true, prefabPath: "Models/Creatures/pentachick"));
+            db.monsters.Add(MakeMonster("swarmer", "Weak Swarmer", 12f, 12f, 5f, 0.8f, Color.green, monsterMeat, 0.45f, flees: true));
+            db.monsters.Add(MakeMonster("brawler", "Average Brawler", 24f, 11f, 8f, 1f, Color.yellow, monsterMeat, 0.35f));
+            db.monsters.Add(MakeMonster("attacker", "Strong Attacker", 40f, 11f, 14f, 1.35f, Color.red, monsterMeat, 0.15f));
+            db.monsters.Add(MakeMonster("exploder", "Rare Exploder", 30f, 11f, 10f, 1.1f, new Color(1f, 0.4f, 0.1f), core, 0.04f, explodes: true));
+            db.monsters.Add(MakeMonster("quest_boss", "Quest Monster", 80f, 11f, 16f, 1.6f, new Color(0.6f, 0.1f, 0.8f), caveKey, 0.01f, boss: true));
 
             db.pickaxeUpgrade = MakeUpgrade("pickaxe_dmg", "Pickaxe Upgrade", "Upgrade pickaxe mining power and head color.", UpgradeType.PickaxeDamage, 20, 1f, 5);
             db.inventoryUpgrade = MakeUpgrade("inv_slot", "Inventory Upgrade", "Add one inventory slot.", UpgradeType.InventorySlot, 8, 1f, 4);
             db.waterPurchase = MakeUpgrade("water", "Water", "Refill thirst.", UpgradeType.Water, 4, 100f, int.MaxValue);
             db.knifeMapListing = MakeUpgrade("knife_unlock", "Knife", "Buy a knife weapon.", UpgradeType.WeaponUnlock, 9, 1f, 1, db.knifeItem);
             db.spearListing = MakeUpgrade("spear_shop", "Spear", "Buy a spear.", UpgradeType.WeaponUnlock, 15, 1f, 1, db.spearItem);
-            db.pistolListing = MakeUpgrade("pistol_shop", "Pistol", "Buy a pistol.", UpgradeType.WeaponUnlock, 25, 1f, 1, db.pistolItem);
-            db.rifleListing = MakeUpgrade("rifle_shop", "Rifle", "Buy a rifle.", UpgradeType.WeaponUnlock, 40, 1f, 1, db.rifleItem);
-            db.shotgunListing = MakeUpgrade("shotgun_shop", "Shotgun", "Buy a shotgun.", UpgradeType.WeaponUnlock, 55, 1f, 1, db.shotgunItem);
-            db.machinegunListing = MakeUpgrade("machinegun_shop", "Machine Gun", "Buy a machine gun.", UpgradeType.WeaponUnlock, 75, 1f, 1, db.machinegunItem);
+            db.pistolListing = MakeUpgrade("pistol_shop", "Pistol", "Buy a pistol.", UpgradeType.WeaponUnlock, 50, 1f, 1, db.pistolItem);
+            db.rifleListing = MakeUpgrade("rifle_shop", "Rifle", "Buy a rifle.", UpgradeType.WeaponUnlock, 4000, 1f, 1, db.rifleItem);
+            db.shotgunListing = MakeUpgrade("shotgun_shop", "Shotgun", "Buy a shotgun.", UpgradeType.WeaponUnlock, 8000, 1f, 1, db.shotgunItem);
+            db.machinegunListing = MakeUpgrade("machinegun_shop", "Machine Gun", "Buy a machine gun.", UpgradeType.WeaponUnlock, 20000, 1f, 1, db.machinegunItem);
             db.grenadeListing = MakeUpgrade("grenade_shop", "Grenade", "Buy a grenade.", UpgradeType.WeaponUnlock, 20, 1f, int.MaxValue, db.grenadeItem);
             db.lizardLureItem = lizardLure;
+            db.rabbitFinderItem = rabbitFinder;
+            db.caveLizardFinderItem = caveLizardFinder;
+            db.salamanderLureItem = salamanderFinder;
             db.phoenixLureItem = phoenixLure;
-            db.caveRatFinderItem = caveRatFinder;
-            db.caveRatFinderListing = MakeUpgrade("cave_rat_finder_shop", "Cave Rat Egg Finder", "Buy a cave rat egg finder.", UpgradeType.WeaponUnlock, 3, 1f, int.MaxValue, caveRatFinder);
-            db.lizardLureListing = MakeUpgrade("lizard_lure_shop", "Lizard Egg Finder", "Buy a lizard egg finder.", UpgradeType.WeaponUnlock, 10, 1f, int.MaxValue, lizardLure);
-            db.phoenixLureListing = MakeUpgrade("phoenix_lure_shop", "Phoenix Egg Finder", "Buy a phoenix egg finder.", UpgradeType.WeaponUnlock, 50, 1f, int.MaxValue, phoenixLure);
+            db.pentachickHeartItem = pentachickHeart;
+            db.caveRatFinderItem = gremlinFinder;
+            db.caveRatFinderListing = MakeUpgrade("gremlin_finder_shop", "Gremlin Finder", "Buy a gremlin finder. Locates gremlin eggs.", UpgradeType.WeaponUnlock, 2, 1f, int.MaxValue, gremlinFinder);
+            db.lizardLureListing = MakeUpgrade("lizard_lure_shop", "Iguana Finder", "Buy an iguana finder. Locates iguana eggs.", UpgradeType.WeaponUnlock, 0, 1f, int.MaxValue, lizardLure);
+            db.rabbitFinderListing = MakeUpgrade("rabbit_finder_shop", "Rabbit Finder", "Buy a rabbit finder. Locates rabbit eggs.", UpgradeType.WeaponUnlock, 0, 1f, int.MaxValue, rabbitFinder);
+            db.caveLizardFinderListing = MakeUpgrade("cave_lizard_finder_shop", "Cave Lizard Finder", "Buy a cave lizard finder. Locates cave lizard eggs.", UpgradeType.WeaponUnlock, 1, 1f, int.MaxValue, caveLizardFinder);
+            db.salamanderLureListing = MakeUpgrade("salamander_finder_shop", "Salamander Finder", "Buy a salamander finder. Locates salamander eggs.", UpgradeType.WeaponUnlock, 5, 1f, int.MaxValue, salamanderFinder);
+            db.phoenixLureListing = MakeUpgrade("phoenix_lure_shop", "Pentachick Finder", "Buy a pentachick finder. Locates pentachick eggs.", UpgradeType.WeaponUnlock, 50, 1f, int.MaxValue, phoenixLure);
 
-            db.shopUpgrades.AddRange(new[] { db.pickaxeUpgrade, db.inventoryUpgrade, db.waterPurchase, db.knifeMapListing, db.caveRatFinderListing, db.lizardLureListing, db.phoenixLureListing });
+            db.shopUpgrades.AddRange(new[] { db.pickaxeUpgrade, db.inventoryUpgrade, db.waterPurchase, db.knifeMapListing, db.caveRatFinderListing, db.lizardLureListing, db.rabbitFinderListing, db.caveLizardFinderListing, db.salamanderLureListing, db.phoenixLureListing });
 
             return db;
 
@@ -135,12 +163,39 @@ namespace MonsterMiner.Core
                 return MakeWeapon(id, name, damage, color, "Textures/Inventory/Knife");
             }
 
-            static ItemDefinition MakeWeapon(string id, string name, int damage, Color color, string iconPath, int sell = 5, int stackLimit = 1)
+            static ItemDefinition MakeWeapon(string id, string name, int damage, Color color, string iconPath, int sell = 5)
             {
                 var item = MakeItem(id, name, ItemCategory.Weapon, sell, color, false);
                 item.weaponDamage = damage;
-                item.stackLimit = stackLimit;
                 item.iconResourcePath = iconPath;
+                return item;
+            }
+
+            static ItemDefinition MakeMeat(string id, int sell, string iconPath)
+            {
+                var meat = MakeItem(id, "Monster Meat", ItemCategory.Drop, sell, new Color(0.85f, 0.25f, 0.2f), true);
+                meat.isEdible = true;
+                meat.iconResourcePath = iconPath;
+                return meat;
+            }
+
+            static ItemDefinition MakeFinder(
+                string id,
+                string name,
+                int sell,
+                Color color,
+                string targetCreatureId,
+                EggFinderRarity rarity,
+                int locateMin,
+                int locateMax)
+            {
+                var item = MakeItem(id, name, ItemCategory.Misc, sell, color, false);
+                item.stackLimit = 99;
+                item.isEggFinder = true;
+                item.finderTargetCreatureId = targetCreatureId;
+                item.finderRarity = rarity;
+                item.finderLocateMin = locateMin;
+                item.finderLocateMax = locateMax;
                 return item;
             }
 
@@ -153,6 +208,7 @@ namespace MonsterMiner.Core
                 item.sellValue = sell;
                 item.worldColor = color;
                 item.isMonsterDrop = drop;
+                item.stackLimit = 1;
                 return item;
             }
 
@@ -168,13 +224,15 @@ namespace MonsterMiner.Core
                 float weight,
                 bool explodes = false,
                 bool boss = false,
-                bool flees = false)
+                bool flees = false,
+                bool fleeOverEdge = false,
+                string prefabPath = null)
             {
                 var m = CreateInstance<MonsterDefinition>();
                 m.monsterId = id;
                 m.displayName = name;
                 m.maxHealth = hp;
-                m.moveSpeed = speed;
+                m.moveSpeedMph = speed;
                 m.attackDamage = dmg;
                 m.scale = scale;
                 m.bodyColor = color;
@@ -183,6 +241,8 @@ namespace MonsterMiner.Core
                 m.explodesOnDeath = explodes;
                 m.isQuestBoss = boss;
                 m.fleesFromPlayer = flees;
+                m.fleesOverPlateauEdge = fleeOverEdge;
+                m.visualPrefabResourcePath = prefabPath;
                 return m;
             }
 

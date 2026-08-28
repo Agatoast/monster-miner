@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 70936d056e03a35449d63d56581f9f64
+timeCreated: 1513630994
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 101318
+  packageName: M1911 - A1 rigged
+  packageVersion: 1.0
+  assetPath: Assets/m1911/Materials/Main_plasstic.mat
+  uploadId: 219625

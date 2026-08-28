@@ -1,4 +1,4 @@
-﻿using MonsterMiner.Core;
+using MonsterMiner.Core;
 using MonsterMiner.Inventory;
 using MonsterMiner.Util;
 using UnityEngine;
@@ -12,6 +12,12 @@ namespace MonsterMiner.Player
         const float SwingAngle = 55f;
         static readonly Vector3 PickaxeScreenOffset = new Vector3(-25f, 140f, 35f);
         static readonly Vector3 KnifeScreenOffset = new Vector3(-45f, 90f, 35f);
+        static readonly Vector3 PistolScreenOffset = new Vector3(-40f, 45f, -40f);
+        static readonly Vector3 SpearScreenOffset = new Vector3(20f, 10f, 0f);
+        static readonly Vector3 MachineGunScreenOffset = new Vector3(-30f, -95f, 45f);
+        static readonly Vector3 ShotgunScreenOffset = new Vector3(-108f, 100f, -8f);
+        static readonly Vector3 RifleScreenOffset = new Vector3(-116f, 8f, 48f);
+        const float SpearUnderFingers = 0.08f;
         static readonly Vector3 PickaxeSwingPivotPixelOffset = new Vector3(0f, 20f, 0f);
         const float PickaxeScreenVerticalTwistDegrees = 90f;
         const float KnifeScreenVerticalTwistDegrees = 90f;
@@ -19,7 +25,7 @@ namespace MonsterMiner.Player
         static readonly Vector3 FallbackLeftAnchorLocalPosition = new Vector3(-0.18f, -0.15f, 0.35f);
         static readonly Vector3 HeldItemLocalPosition = new Vector3(0f, -0.03f, 0.06f);
         static readonly Vector3 HeldPebbleLocalPosition = new Vector3(0f, -0.04f, 0.08f);
-        static readonly Vector3 PebbleScreenOffset = new Vector3(0f, 120f, -100f);
+        static readonly Vector3 LeftHandScreenOffset = new Vector3(0f, 120f, -100f);
 
         VrHandsVisualFactory hands;
         Transform heldItemAnchor;
@@ -30,7 +36,14 @@ namespace MonsterMiner.Player
         bool swinging;
         bool holdingPickaxe;
         bool holdingKnife;
-        bool holdingPebble;
+        bool holdingPistol;
+        bool holdingSpear;
+        bool holdingShotgun;
+        bool holdingRifle;
+        bool holdingMachineGun;
+        bool holdingLeftHandItem;
+
+        bool HoldingThrustWeapon => holdingKnife || holdingSpear;
 
         public Transform LeftHandAnchor => hands?.LeftHandAnchor;
 
@@ -89,18 +102,45 @@ namespace MonsterMiner.Player
             if (heldVisual == null || hands == null || !hands.HasMesh || controller?.ViewCamera == null)
                 return;
 
-            if (holdingPebble)
+            if (holdingLeftHandItem)
             {
-                ApplyHeldPebbleScreenOffset();
+                ApplyHeldLeftHandItemScreenOffset();
                 return;
             }
 
-            if (holdingKnife)
+            if (HoldingThrustWeapon)
             {
                 if (swinging)
                     hands.ApplyKnifeStab(controller.ViewCamera, GetKnifeStabCurve());
 
-                ApplyHeldKnifeOffset();
+                if (holdingSpear)
+                    ApplyHeldSpearOffset();
+                else
+                    ApplyHeldKnifeOffset();
+                return;
+            }
+
+            if (holdingMachineGun)
+            {
+                ApplyHeldMachineGunOffset();
+                return;
+            }
+
+            if (holdingShotgun)
+            {
+                ApplyHeldShotgunOffset();
+                return;
+            }
+
+            if (holdingRifle)
+            {
+                ApplyHeldRifleOffset();
+                return;
+            }
+
+            if (holdingPistol)
+            {
+                ApplyHeldPistolOffset();
                 return;
             }
 
@@ -112,14 +152,50 @@ namespace MonsterMiner.Player
 
         void ApplyHeldKnifeOffset()
         {
+            ApplyHeldThrustWeaponOffset(
+                KnifeVisualFactory.HeldMeshLocalPosition,
+                KnifeVisualFactory.HeldMeshLocalRotation,
+                KnifeScreenOffset);
+        }
+
+        void ApplyHeldPistolOffset()
+        {
+            ApplyHeldThrustWeaponOffset(
+                PistolVisualFactory.HeldMeshLocalPosition,
+                PistolVisualFactory.HeldMeshLocalRotation,
+                PistolScreenOffset);
+        }
+
+        void ApplyHeldSpearOffset()
+        {
+            var camera = controller.ViewCamera;
+            Transform grip = hands.SpearGripAnchor;
+            Quaternion restRotation = Quaternion.AngleAxis(
+                KnifeScreenVerticalTwistDegrees,
+                camera.transform.up) * grip.rotation * SpearVisualFactory.HeldMeshLocalRotation;
+
+            Vector3 pinch = grip.position;
+            Vector3 screen = camera.WorldToScreenPoint(pinch);
+            if (screen.z > 0.001f)
+            {
+                screen.x += SpearScreenOffset.x;
+                screen.y += SpearScreenOffset.y;
+                pinch = camera.ScreenToWorldPoint(screen);
+            }
+
+            pinch += camera.transform.forward * SpearUnderFingers;
+            Vector3 position = pinch - restRotation * SpearVisualFactory.ScaledMeshCenter;
+            heldVisual.SetPositionAndRotation(position, restRotation);
+        }
+
+        void ApplyHeldThrustWeaponOffset(Vector3 meshLocal, Quaternion meshLocalRot, Vector3 screenOffset)
+        {
             var camera = controller.ViewCamera;
             Transform grip = hands.KnifeGripAnchor;
-            Vector3 meshLocal = KnifeVisualFactory.HeldMeshLocalPosition;
-            Quaternion meshLocalRot = KnifeVisualFactory.HeldMeshLocalRotation;
 
             Vector3 gripPointWorld = grip.TransformPoint(meshLocal);
             Quaternion gripPointRotation = grip.rotation * meshLocalRot;
-            Vector3 worldOffset = hands.GetScreenWorldOffset(camera, gripPointWorld, KnifeScreenOffset);
+            Vector3 worldOffset = hands.GetScreenWorldOffset(camera, gripPointWorld, screenOffset);
             Quaternion screenVerticalTwist = Quaternion.AngleAxis(
                 KnifeScreenVerticalTwistDegrees,
                 camera.transform.up);
@@ -135,6 +211,36 @@ namespace MonsterMiner.Player
                 PickaxeVisualFactory.HeldMeshLocalRotation,
                 PickaxeVisualFactory.HeldSwingPivotLocal,
                 PickaxeScreenOffset);
+        }
+
+        void ApplyHeldMachineGunOffset()
+        {
+            ApplyHeldGripWeaponOffset(
+                hands.PickaxeGripAnchor,
+                MachineGunVisualFactory.HeldMeshLocalPosition,
+                MachineGunVisualFactory.HeldMeshLocalRotation,
+                Vector3.zero,
+                MachineGunScreenOffset);
+        }
+
+        void ApplyHeldShotgunOffset()
+        {
+            ApplyHeldGripWeaponOffset(
+                hands.PickaxeGripAnchor,
+                ShotgunVisualFactory.HeldMeshLocalPosition,
+                ShotgunVisualFactory.HeldMeshLocalRotation,
+                Vector3.zero,
+                ShotgunScreenOffset);
+        }
+
+        void ApplyHeldRifleOffset()
+        {
+            ApplyHeldGripWeaponOffset(
+                hands.PickaxeGripAnchor,
+                RifleVisualFactory.HeldMeshLocalPosition,
+                RifleVisualFactory.HeldMeshLocalRotation,
+                Vector3.zero,
+                RifleScreenOffset);
         }
 
         void ApplyHeldGripWeaponOffset(
@@ -170,7 +276,7 @@ namespace MonsterMiner.Player
             heldVisual.SetPositionAndRotation(finalPosition, finalRotation);
         }
 
-        void ApplyHeldPebbleScreenOffset()
+        void ApplyHeldLeftHandItemScreenOffset()
         {
             var anchor = GetLeftHandAnchor();
             if (anchor == null)
@@ -178,7 +284,7 @@ namespace MonsterMiner.Player
 
             var camera = controller.ViewCamera;
             Vector3 baseWorld = anchor.TransformPoint(HeldPebbleLocalPosition);
-            Vector3 worldOffset = hands.GetScreenWorldOffset(camera, baseWorld, PebbleScreenOffset);
+            Vector3 worldOffset = hands.GetScreenWorldOffset(camera, baseWorld, LeftHandScreenOffset);
             heldVisual.SetPositionAndRotation(baseWorld + worldOffset, anchor.rotation);
         }
 
@@ -192,7 +298,7 @@ namespace MonsterMiner.Player
 
         float GetKnifeStabCurve()
         {
-            if (!swinging || !holdingKnife)
+            if (!swinging || !HoldingThrustWeapon)
                 return 0f;
 
             return Mathf.Sin(Mathf.Clamp01(swingTimer / SwingDuration) * Mathf.PI);
@@ -210,7 +316,7 @@ namespace MonsterMiner.Player
             {
                 if (holdingPickaxe)
                     hands.ApplyPickaxeForwardSwing(controller.ViewCamera, t);
-                else if (!holdingKnife)
+                else if (!HoldingThrustWeapon)
                 {
                     float angle = Mathf.Sin(t * Mathf.PI) * SwingAngle;
                     hands.ApplySwingRotation(angle);
@@ -229,7 +335,7 @@ namespace MonsterMiner.Player
                 {
                     if (holdingPickaxe)
                         hands.ResetPickaxeSwing();
-                    else if (holdingKnife)
+                    else if (HoldingThrustWeapon)
                         hands.EndKnifeStab();
                 }
                 else if (heldItemAnchor != null)
@@ -243,7 +349,7 @@ namespace MonsterMiner.Player
         {
             swinging = true;
             swingTimer = 0f;
-            if (holdingKnife)
+            if (HoldingThrustWeapon)
                 hands?.BeginKnifeStab();
         }
 
@@ -262,7 +368,7 @@ namespace MonsterMiner.Player
             if (heldVisual != null)
                 Destroy(heldVisual.gameObject);
 
-            if (swinging && hands != null && hands.HasMesh && holdingKnife)
+            if (swinging && hands != null && hands.HasMesh && HoldingThrustWeapon)
             {
                 swinging = false;
                 hands.EndKnifeStab();
@@ -270,7 +376,12 @@ namespace MonsterMiner.Player
 
             holdingPickaxe = false;
             holdingKnife = false;
-            holdingPebble = false;
+            holdingPistol = false;
+            holdingSpear = false;
+            holdingShotgun = false;
+            holdingRifle = false;
+            holdingMachineGun = false;
+            holdingLeftHandItem = false;
             heldItemAnchor = hands != null && hands.HasMesh ? hands.RightHandAnchor : heldItemAnchor;
 
             var ctx = GameContext.Instance;
@@ -284,7 +395,17 @@ namespace MonsterMiner.Player
             if (slot.item.itemId == "shiny_pebble")
             {
                 heldVisual = PebbleVisualFactory.CreateHeldPebble(GetLeftHandAnchor(), HeldPebbleLocalPosition).transform;
-                holdingPebble = true;
+                holdingLeftHandItem = true;
+                return;
+            }
+
+            if (slot.item.isMonsterDrop)
+            {
+                heldVisual = MeatVisualFactory.CreateHeldMonsterDrop(
+                    slot.item,
+                    GetLeftHandAnchor(),
+                    HeldPebbleLocalPosition).transform;
+                holdingLeftHandItem = true;
                 return;
             }
 
@@ -318,6 +439,92 @@ namespace MonsterMiner.Player
                     heldVisual = knife.transform;
                     heldVisual.SetParent(controller.ViewCamera.transform, true);
                     holdingKnife = true;
+                    return;
+                }
+            }
+
+            if (InventorySystem.IsSpearItem(slot.item))
+            {
+                if (hands != null && hands.HasMesh)
+                    heldItemAnchor = hands.SpearGripAnchor;
+
+                var spear = SpearVisualFactory.CreateHeldSpear(heldItemAnchor);
+                if (spear != null)
+                {
+                    heldVisual = spear.transform;
+                    heldVisual.SetParent(controller.ViewCamera.transform, true);
+                    holdingSpear = true;
+                    return;
+                }
+            }
+
+            if (InventorySystem.IsGrenadeItem(slot.item))
+            {
+                var grenade = GrenadeVisualFactory.CreateHeldGrenade(heldItemAnchor);
+                if (grenade != null)
+                {
+                    heldVisual = grenade.transform;
+                    heldVisual.SetParent(heldItemAnchor, false);
+                    return;
+                }
+            }
+
+            if (InventorySystem.IsPistolItem(slot.item))
+            {
+                if (hands != null && hands.HasMesh)
+                    heldItemAnchor = hands.KnifeGripAnchor;
+
+                var pistol = PistolVisualFactory.CreateHeldPistol(heldItemAnchor);
+                if (pistol != null)
+                {
+                    heldVisual = pistol.transform;
+                    heldVisual.SetParent(controller.ViewCamera.transform, true);
+                    holdingPistol = true;
+                    return;
+                }
+            }
+
+            if (InventorySystem.IsShotgunItem(slot.item))
+            {
+                if (hands != null && hands.HasMesh)
+                    heldItemAnchor = hands.PickaxeGripAnchor;
+
+                var shotgun = ShotgunVisualFactory.CreateHeldShotgun(heldItemAnchor);
+                if (shotgun != null)
+                {
+                    heldVisual = shotgun.transform;
+                    heldVisual.SetParent(controller.ViewCamera.transform, true);
+                    holdingShotgun = true;
+                    return;
+                }
+            }
+
+            if (InventorySystem.IsRifleItem(slot.item))
+            {
+                if (hands != null && hands.HasMesh)
+                    heldItemAnchor = hands.PickaxeGripAnchor;
+
+                var rifle = RifleVisualFactory.CreateHeldRifle(heldItemAnchor);
+                if (rifle != null)
+                {
+                    heldVisual = rifle.transform;
+                    heldVisual.SetParent(controller.ViewCamera.transform, true);
+                    holdingRifle = true;
+                    return;
+                }
+            }
+
+            if (InventorySystem.IsMachineGunItem(slot.item))
+            {
+                if (hands != null && hands.HasMesh)
+                    heldItemAnchor = hands.PickaxeGripAnchor;
+
+                var machineGun = MachineGunVisualFactory.CreateHeldMachineGun(heldItemAnchor);
+                if (machineGun != null)
+                {
+                    heldVisual = machineGun.transform;
+                    heldVisual.SetParent(controller.ViewCamera.transform, true);
+                    holdingMachineGun = true;
                     return;
                 }
             }

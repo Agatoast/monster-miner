@@ -105,7 +105,7 @@ namespace MonsterMiner.Economy
             bool isKey = slot.item.itemId == "cave_key";
             bool isPebble = slot.item.itemId == "shiny_pebble";
             ctx.Wallet.Add(value);
-            ctx.Inventory.TryRemoveFromSelected(slot.count);
+            ctx.Inventory.TryRemoveFromSelected(1);
 
             if (isPebble)
                 ctx.SpawnManager?.NotifyPebbleSold();

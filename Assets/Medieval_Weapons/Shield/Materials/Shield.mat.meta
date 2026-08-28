@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 905ba840b9b0b0747a676597464c48f2
+timeCreated: 1478091881
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 75299
+  packageName: Medieval Weapons PBR Pack
+  packageVersion: 1.0
+  assetPath: Assets/Medieval_Weapons/Shield/Materials/Shield.mat
+  uploadId: 195359

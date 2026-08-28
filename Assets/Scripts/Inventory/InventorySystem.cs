@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using MonsterMiner.Data;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.Inventory
@@ -86,6 +87,11 @@ namespace MonsterMiner.Inventory
             return GetMiningGloveBonus() + pickaxeBonus;
         }
 
+        public int GetEggHitsNeeded(int baseHits = MonsterEgg.BasePickaxeHits)
+        {
+            return Mathf.Max(1, baseHits - GetTotalMiningBonus());
+        }
+
         public bool TryAdd(ItemDefinition item, int amount = 1, bool fromShopPurchase = false)
         {
             if (item == null || amount <= 0)
@@ -93,6 +99,9 @@ namespace MonsterMiner.Inventory
 
             if (item.isMiningGlove)
             {
+                if (amount > 1)
+                    return false;
+
                 EquipGloves(item);
                 return true;
             }
@@ -113,36 +122,127 @@ namespace MonsterMiner.Inventory
             if (!CanAdd(item, amount))
                 return false;
 
+            if (fromShopPurchase)
+                return TryAddShopPurchase(item);
+
             int remaining = amount;
-            for (int i = FirstItemSlotIndex; i < slots.Count && remaining > 0; i++)
+            if (item.stackLimit > 1)
             {
-                var slot = slots[i];
-                if (slot.item == item && slot.count < item.stackLimit)
+                for (int i = FirstItemSlotIndex; i < slots.Count && remaining > 0; i++)
                 {
+                    var slot = slots[i];
+                    if (slot.IsEmpty || slot.item != item)
+                        continue;
+
                     int space = item.stackLimit - slot.count;
+                    if (space <= 0)
+                        continue;
+
                     int add = Mathf.Min(space, remaining);
                     slot.count += add;
                     remaining -= add;
-                    if (fromShopPurchase)
-                        slot.fromShopPurchase = true;
                 }
             }
 
             for (int i = FirstItemSlotIndex; i < slots.Count && remaining > 0; i++)
             {
                 var slot = slots[i];
-                if (slot.IsEmpty)
-                {
-                    slot.item = item;
-                    int add = Mathf.Min(item.stackLimit, remaining);
-                    slot.count = add;
-                    remaining -= add;
-                    slot.fromShopPurchase = fromShopPurchase;
-                }
+                if (!slot.IsEmpty)
+                    continue;
+
+                int add = Mathf.Min(Mathf.Max(1, item.stackLimit), remaining);
+                slot.item = item;
+                slot.count = add;
+                slot.fromShopPurchase = fromShopPurchase;
+                remaining -= add;
             }
 
             OnInventoryChanged?.Invoke();
-            return true;
+            return remaining == 0;
+        }
+
+        bool TryAddShopPurchase(ItemDefinition item)
+        {
+            if (item.stackLimit > 1)
+            {
+                for (int i = FirstItemSlotIndex; i < slots.Count; i++)
+                {
+                    var slot = slots[i];
+                    if (slot.IsEmpty || slot.item != item || slot.count >= item.stackLimit)
+                        continue;
+
+                    slot.count++;
+                    OnInventoryChanged?.Invoke();
+                    return true;
+                }
+            }
+
+            for (int i = FirstItemSlotIndex; i < slots.Count; i++)
+            {
+                var slot = slots[i];
+                if (!slot.IsEmpty)
+                    continue;
+
+                slot.item = item;
+                slot.count = 1;
+                slot.fromShopPurchase = true;
+                OnInventoryChanged?.Invoke();
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool CanAddShopPurchase(ItemDefinition item)
+        {
+            if (item == null)
+                return false;
+
+            if (item.isMiningGlove || IsPickaxeItem(item))
+                return true;
+
+            if (item.stackLimit > 1)
+            {
+                for (int i = FirstItemSlotIndex; i < slots.Count; i++)
+                {
+                    var slot = slots[i];
+                    if (!slot.IsEmpty && slot.item == item && slot.count < item.stackLimit)
+                        return true;
+                }
+            }
+
+            for (int i = FirstItemSlotIndex; i < slots.Count; i++)
+            {
+                if (slots[i].IsEmpty)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public bool ContainsItem(ItemDefinition item)
+        {
+            if (item == null)
+                return false;
+
+            for (int i = 0; i < slots.Count; i++)
+            {
+                if (!slots[i].IsEmpty && slots[i].item == item)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public bool HasEmptyItemSlot()
+        {
+            for (int i = FirstItemSlotIndex; i < slots.Count; i++)
+            {
+                if (slots[i].IsEmpty)
+                    return true;
+            }
+
+            return false;
         }
 
         public bool CanAdd(ItemDefinition item, int amount = 1)
@@ -150,32 +250,37 @@ namespace MonsterMiner.Inventory
             if (item == null || amount <= 0)
                 return false;
 
+            if (IsPentachickHeart(item) && ContainsItem(item))
+                return false;
+
             if (item.isMiningGlove || IsPickaxeItem(item))
                 return amount <= 1;
 
             int remaining = amount;
-            for (int i = FirstItemSlotIndex; i < slots.Count && remaining > 0; i++)
+            if (item.stackLimit > 1)
             {
-                var slot = slots[i];
-                if (slot.item == item && slot.count < item.stackLimit)
+                for (int i = FirstItemSlotIndex; i < slots.Count && remaining > 0; i++)
                 {
-                    int space = item.stackLimit - slot.count;
-                    int add = Mathf.Min(space, remaining);
-                    remaining -= add;
+                    var slot = slots[i];
+                    if (slot.IsEmpty || slot.item != item)
+                        continue;
+
+                    remaining -= Mathf.Max(0, item.stackLimit - slot.count);
                 }
             }
 
-            for (int i = FirstItemSlotIndex; i < slots.Count && remaining > 0; i++)
+            if (remaining <= 0)
+                return true;
+
+            int emptySlots = 0;
+            for (int i = FirstItemSlotIndex; i < slots.Count; i++)
             {
-                var slot = slots[i];
-                if (slot.IsEmpty)
-                {
-                    int add = Mathf.Min(item.stackLimit, remaining);
-                    remaining -= add;
-                }
+                if (slots[i].IsEmpty)
+                    emptySlots++;
             }
 
-            return remaining <= 0;
+            int perEmptySlot = Mathf.Max(1, item.stackLimit);
+            return emptySlots * perEmptySlot >= remaining;
         }
 
         public void NotifyChanged() => OnInventoryChanged?.Invoke();
@@ -315,11 +420,14 @@ namespace MonsterMiner.Inventory
                 if (slot.IsEmpty)
                     continue;
 
-                var dropPoint = position + UnityEngine.Random.insideUnitSphere * 0.6f;
-                dropPoint.y = position.y;
-                var pickup = WorldPickup.Spawn(slot.item, slot.count, dropPoint);
-                if (pickup != null && contentRoot != null)
-                    pickup.transform.SetParent(contentRoot, true);
+                for (int n = 0; n < slot.count; n++)
+                {
+                    var dropPoint = position + UnityEngine.Random.insideUnitSphere * 0.6f;
+                    dropPoint.y = position.y;
+                    var pickup = WorldPickup.Spawn(slot.item, 1, dropPoint);
+                    if (pickup != null && contentRoot != null)
+                        pickup.transform.SetParent(contentRoot, true);
+                }
 
                 slot.item = null;
                 slot.count = 0;
@@ -359,8 +467,37 @@ namespace MonsterMiner.Inventory
         {
             return item != null
                 && item.category == ItemCategory.Weapon
-                && item.weaponDamage > 0;
+                && item.weaponDamage > 0
+                && !IsGrenadeItem(item);
         }
+
+        public static bool IsGrenadeItem(ItemDefinition item) => item != null && item.itemId == "grenade";
+
+        public static bool IsRangedWeaponItem(ItemDefinition item)
+        {
+            if (item == null)
+                return false;
+
+            return item.itemId == "pistol"
+                || item.itemId == "shotgun"
+                || item.itemId == "rifle"
+                || item.itemId == "machinegun";
+        }
+
+        public static bool IsSpearItem(ItemDefinition item) => item != null && item.itemId == "spear";
+
+        public static bool IsMachineGunItem(ItemDefinition item) => item != null && item.itemId == "machinegun";
+
+        public static bool IsPistolItem(ItemDefinition item) => item != null && item.itemId == "pistol";
+
+        public static bool IsShotgunItem(ItemDefinition item) => item != null && item.itemId == "shotgun";
+
+        public static bool IsRifleItem(ItemDefinition item) => item != null && item.itemId == "rifle";
+
+        public static bool IsPentachickHeart(ItemDefinition item) => item != null && item.itemId == "pentachick_heart";
+
+        public static bool IsMonsterMeat(ItemDefinition item) =>
+            item != null && item.isMonsterDrop && item.isEdible && item.category == ItemCategory.Drop && item.itemId != "rare_core";
 
         public bool TryUpgradeKnife(ItemDefinition nextKnife)
         {
@@ -393,6 +530,8 @@ namespace MonsterMiner.Inventory
 
             return null;
         }
+
+        public static bool IsEggFinder(ItemDefinition item) => item != null && item.isEggFinder;
 
         static bool IsPickaxeItem(ItemDefinition item) => item != null && item.itemId == "pickaxe";
 

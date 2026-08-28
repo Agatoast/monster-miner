@@ -1,14 +1,25 @@
+using System.Collections.Generic;
 using MonsterMiner.Data;
+using MonsterMiner.Inventory;
 using UnityEngine;
 
 namespace MonsterMiner.Util
 {
     public static class ItemIconUtility
     {
+        static readonly Dictionary<string, Texture2D> processedIconCache = new Dictionary<string, Texture2D>();
+
         public static Texture2D GetIcon(ItemDefinition item)
         {
             if (item == null || string.IsNullOrEmpty(item.iconResourcePath))
                 return null;
+
+            if (InventorySystem.IsGrenadeItem(item))
+            {
+                return LoadIconWithTransparentBackground(
+                    item.iconResourcePath,
+                    IconBackgroundKeyMode.Black);
+            }
 
             return Resources.Load<Texture2D>(item.iconResourcePath);
         }
@@ -26,13 +37,20 @@ namespace MonsterMiner.Util
             float darkThreshold = 0.12f,
             float whiteThreshold = 0.95f)
         {
+            string cacheKey = $"{resourcePath}|{(int)keyMode}|{darkThreshold:F3}|{whiteThreshold:F3}";
+            if (processedIconCache.TryGetValue(cacheKey, out var cached) && cached != null)
+                return cached;
+
             var source = Resources.Load<Texture2D>(resourcePath);
             if (source == null)
                 return null;
 
             var readable = CreateReadableCopy(source);
             if (readable == null)
+            {
+                processedIconCache[cacheKey] = source;
                 return source;
+            }
 
             var pixels = readable.GetPixels();
             for (int i = 0; i < pixels.Length; i++)
@@ -55,6 +73,7 @@ namespace MonsterMiner.Util
 
             readable.SetPixels(pixels);
             readable.Apply(false, false);
+            processedIconCache[cacheKey] = readable;
             return readable;
         }
 
@@ -63,6 +82,12 @@ namespace MonsterMiner.Util
             var icon = GetIcon(item);
             if (icon == null)
                 return false;
+
+            if (InventorySystem.IsGrenadeItem(item))
+            {
+                GUI.color = Color.white;
+                GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            }
 
             GUI.color = Color.white;
             GUI.DrawTexture(rect, icon, ScaleMode.ScaleToFit);

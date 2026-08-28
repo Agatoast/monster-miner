@@ -7,7 +7,6 @@ namespace MonsterMiner.Util
     {
         const string NormalManResourcePath = "Models/People/normal_man";
         const string StrongManResourcePath = "Models/People/strong_man_a";
-        const string RightHandBoneName = "Hand.R";
 
         public static GameObject CreateShopkeeper(Transform parent, Vector3 localPosition, Quaternion localRotation, float floorWorldY)
         {
@@ -40,8 +39,6 @@ namespace MonsterMiner.Util
                 floorWorldY);
             if (character == null)
                 return null;
-
-            AttachPickaxeToRightHand(character.transform);
 
             var interactCollider = character.AddComponent<BoxCollider>();
             FitBoxColliderToCharacterBody(character, interactCollider);
@@ -78,36 +75,6 @@ namespace MonsterMiner.Util
                 animator.SetTrigger("idle");
 
             return character;
-        }
-
-        static void AttachPickaxeToRightHand(Transform characterRoot)
-        {
-            Transform hand = FindDeepChild(characterRoot, RightHandBoneName);
-            if (hand == null)
-            {
-                var fallback = new GameObject("RightHandPickaxeAnchor").transform;
-                fallback.SetParent(characterRoot, false);
-                fallback.localPosition = new Vector3(0.34f, 1.05f, 0.12f);
-                fallback.localRotation = Quaternion.Euler(10f, 0f, 0f);
-                hand = fallback;
-            }
-
-            PickaxeVisualFactory.CreateNpcHeldPickaxe(hand);
-        }
-
-        static Transform FindDeepChild(Transform parent, string name)
-        {
-            if (parent.name == name)
-                return parent;
-
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                var found = FindDeepChild(parent.GetChild(i), name);
-                if (found != null)
-                    return found;
-            }
-
-            return null;
         }
 
         static void FitBoxColliderToCharacterBody(GameObject character, BoxCollider collider, float padding = 0.08f)

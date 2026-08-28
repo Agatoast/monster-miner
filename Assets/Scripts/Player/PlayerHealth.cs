@@ -82,6 +82,7 @@ namespace MonsterMiner.Player
             {
                 var eggCarrier = GetComponent<PlayerEggCarrier>();
                 eggCarrier?.DropEggAt(deathPos);
+                GetComponent<PlayerWingsFlight>()?.CancelFlightAndRestoreWings();
                 ctx.Inventory?.DropEquippedGlovesAt(deathPos);
                 ctx.Inventory?.DropAllAt(deathPos);
                 ctx.MakeAllMonstersFlee();

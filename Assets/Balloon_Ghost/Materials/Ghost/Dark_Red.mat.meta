@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fdf939727ff54434d8efb4756c1b5414
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 209499
+  packageName: Balloon Ghost(with Breakable parts)
+  packageVersion: 1.0
+  assetPath: Assets/Balloon_Ghost/Materials/Ghost/Dark_Red.mat
+  uploadId: 470502

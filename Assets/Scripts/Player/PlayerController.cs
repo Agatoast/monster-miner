@@ -1,5 +1,6 @@
-﻿using MonsterMiner.Core;
+using MonsterMiner.Core;
 using MonsterMiner.UI;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.Player
@@ -7,8 +8,9 @@ namespace MonsterMiner.Player
     [RequireComponent(typeof(Rigidbody))]
     public class PlayerController : MonoBehaviour
     {
-        [SerializeField] float moveSpeed = 6f;
-        [SerializeField] float jumpForce = 5f;
+        public const float CharacterHeight = WorldScale.CharacterHeightUnits;
+
+        [SerializeField] float moveSpeedMph = 11f;
         [SerializeField] float mouseSensitivity = 2f;
         [SerializeField] float landingBounce = 0.35f;
         [SerializeField] float groundCheckDistance = 0.2f;
@@ -16,20 +18,25 @@ namespace MonsterMiner.Player
         Rigidbody rb;
         Camera viewCamera;
         Transform head;
+        CapsuleCollider bodyCollider;
         float pitch;
         bool groundedLastFrame;
         bool gameplayCursorLocked = true;
+        bool jumpRequested;
 
         public Camera ViewCamera => viewCamera;
         public Transform Head => head;
         public bool IsGameplayCursorLocked => gameplayCursorLocked;
 
+        float JumpVelocity => Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y) * CharacterHeight * 0.5f);
+
         public void Initialize(Vector3 spawnPoint)
         {
             rb = GetComponent<Rigidbody>();
+            bodyCollider = GetComponent<CapsuleCollider>();
             rb.freezeRotation = true;
             rb.constraints = RigidbodyConstraints.FreezeRotation;
-            transform.position = spawnPoint;
+            transform.position = SnapToFloor(spawnPoint);
             transform.rotation = Quaternion.identity;
             pitch = 0f;
 
@@ -43,6 +50,7 @@ namespace MonsterMiner.Player
             camGo.transform.localRotation = Quaternion.identity;
             viewCamera = camGo.AddComponent<Camera>();
             viewCamera.nearClipPlane = 0.05f;
+            viewCamera.farClipPlane = 2500f;
             RenderPipelineSetup.ConfigureCamera(viewCamera);
             var listener = camGo.AddComponent<AudioListener>();
             DisableExtraAudioListeners(listener);
@@ -71,8 +79,8 @@ namespace MonsterMiner.Player
 
             ApplyCursorState();
 
-            if (Input.GetKeyDown(KeyCode.Space) && IsGrounded())
-                rb.AddForce(Vector3.up * jumpForce, ForceMode.VelocityChange);
+            if (Input.GetKeyDown(KeyCode.Space) && !IsUiCursorMode() && !IsGameplayBlocked())
+                jumpRequested = true;
         }
 
         void LateUpdate()
@@ -142,14 +150,39 @@ namespace MonsterMiner.Player
 
         void FixedUpdate()
         {
+            if (IsGameplayBlocked() || IsUiCursorMode())
+            {
+                jumpRequested = false;
+                return;
+            }
+
+            if (GetComponent<PlayerWingsFlight>()?.IsFlying == true)
+            {
+                jumpRequested = false;
+                return;
+            }
+
             var input = new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical"));
             if (input.sqrMagnitude > 1f)
                 input.Normalize();
 
-            var move = transform.TransformDirection(input) * moveSpeed;
+            var move = transform.TransformDirection(input) * WorldScale.MilesPerHour(moveSpeedMph);
             var velocity = rb.linearVelocity;
             velocity.x = move.x;
             velocity.z = move.z;
+
+            if (jumpRequested && IsGrounded())
+            {
+                if (input.sqrMagnitude < 0.01f)
+                {
+                    velocity.x = 0f;
+                    velocity.z = 0f;
+                }
+
+                velocity.y = JumpVelocity;
+                jumpRequested = false;
+            }
+
             rb.linearVelocity = velocity;
 
             bool grounded = IsGrounded();
@@ -164,6 +197,12 @@ namespace MonsterMiner.Player
                 return;
 
             float yaw = Input.GetAxis("Mouse X") * mouseSensitivity;
+            if (GrenadeThrowController.UsesMouseYForRange)
+            {
+                transform.Rotate(0f, yaw, 0f);
+                return;
+            }
+
             pitch -= Input.GetAxis("Mouse Y") * mouseSensitivity;
             pitch = Mathf.Clamp(pitch, -85f, 85f);
             transform.Rotate(0f, yaw, 0f);
@@ -172,19 +211,53 @@ namespace MonsterMiner.Player
 
         bool IsGrounded()
         {
-            return Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down, groundCheckDistance + 0.15f);
+            float probeDistance = groundCheckDistance + 0.2f;
+            float bottomOffset = CharacterHeight * 0.5f;
+            if (bodyCollider != null)
+                bottomOffset = (bodyCollider.height * 0.5f - bodyCollider.center.y) * transform.lossyScale.y;
+
+            var origin = transform.position - Vector3.up * bottomOffset + Vector3.up * 0.08f;
+            return Physics.Raycast(origin, Vector3.down, probeDistance, ~0, QueryTriggerInteraction.Ignore)
+                || Physics.SphereCast(origin, 0.18f, Vector3.down, out _, probeDistance, ~0, QueryTriggerInteraction.Ignore);
         }
 
         public void Respawn(Vector3 spawnPoint)
         {
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
-            transform.position = spawnPoint;
+            transform.position = SnapToFloor(spawnPoint);
             transform.rotation = Quaternion.identity;
             pitch = 0f;
             if (head != null)
                 head.localRotation = Quaternion.identity;
             LockCursorToCenter();
+        }
+
+        Vector3 SnapToFloor(Vector3 worldPos)
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds == null)
+                return worldPos;
+
+            var local = bounds.transform.InverseTransformPoint(worldPos);
+            float floorY;
+            if (bounds.TryResolveFloorWorldPoint(local.x, local.z, out var floorPoint))
+            {
+                worldPos.x = floorPoint.x;
+                worldPos.z = floorPoint.z;
+                floorY = floorPoint.y;
+            }
+            else
+            {
+                floorY = bounds.SampleFloorWorldY(local.x, local.z);
+            }
+
+            float halfHeight = CharacterHeight * 0.5f;
+            if (bodyCollider != null)
+                halfHeight = (bodyCollider.height * 0.5f - bodyCollider.center.y) * transform.lossyScale.y;
+
+            worldPos.y = floorY + halfHeight + bounds.SpawnRestHeight;
+            return worldPos;
         }
     }
 }

@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: fd464ed790731e344b5135fbfe30a302
+timeCreated: 1513630994
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 101318
+  packageName: M1911 - A1 rigged
+  packageVersion: 1.0
+  assetPath: Assets/m1911/Materials/Main_metal.mat
+  uploadId: 219625

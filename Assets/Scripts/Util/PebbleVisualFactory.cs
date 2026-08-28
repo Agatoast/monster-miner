@@ -34,7 +34,7 @@ namespace MonsterMiner.Util
             int seed = Mathf.Abs((floorContactPoint * 1000f).GetHashCode());
             var scale = GetPebbleScale(seed) * WorldScaleMultiplier;
             var pebble = CreatePebble(name, floorContactPoint, scale, seed, includeCollider: true);
-            FloorAnchor.SnapBottomToFloor(pebble, floorContactPoint.y, 0.01f);
+            FloorAnchor.PlaceOnFloor(pebble, floorContactPoint);
             return pebble;
         }
 

@@ -18,6 +18,7 @@ namespace MonsterMiner.Player
         Transform leftHandAnchor;
         Transform pickaxeGripAnchor;
         Transform knifeGripAnchor;
+        Transform spearGripAnchor;
         SkinnedMeshRenderer meshRenderer;
         Material handsMaterial;
         Quaternion rightArmRestRotation;
@@ -34,6 +35,7 @@ namespace MonsterMiner.Player
         public Transform LeftHandAnchor => leftHandAnchor != null ? leftHandAnchor : RightHandAnchor;
         public Transform PickaxeGripAnchor => pickaxeGripAnchor != null ? pickaxeGripAnchor : RightHandAnchor;
         public Transform KnifeGripAnchor => knifeGripAnchor != null ? knifeGripAnchor : RightHandAnchor;
+        public Transform SpearGripAnchor => spearGripAnchor != null ? spearGripAnchor : KnifeGripAnchor;
         public bool HasMesh => handsInstance != null;
 
         public VrHandsVisualFactory(Transform cameraTransform)
@@ -71,6 +73,7 @@ namespace MonsterMiner.Player
 
             pickaxeGripAnchor = CreateGripAnchor("PickaxeGripAnchor");
             knifeGripAnchor = CreateGripAnchor("KnifeGripAnchor");
+            spearGripAnchor = CreateFingerPinchAnchor("SpearGripAnchor");
             if (pickaxeGripAnchor != null)
             {
                 pickaxeGripRestRotation = pickaxeGripAnchor.localRotation;
@@ -101,6 +104,34 @@ namespace MonsterMiner.Player
 
             if (thumb != null && index != null)
                 anchor.localPosition = (thumb.localPosition + index.localPosition) * 0.5f + PinchGripLocalOffset;
+            else
+                anchor.localPosition = PinchGripLocalOffset;
+
+            return anchor;
+        }
+
+        Transform CreateFingerPinchAnchor(string anchorName)
+        {
+            if (rightHandAnchor == null)
+                return null;
+
+            var thumb = FindDeepChild(rightHandAnchor, "J_Right_HandThumb2");
+            var index = FindDeepChild(rightHandAnchor, "J_Right_HandIndex2");
+            if (thumb == null)
+                thumb = FindDeepChild(rightHandAnchor, "J_Right_HandThumb1");
+            if (index == null)
+                index = FindDeepChild(rightHandAnchor, "J_Right_HandIndex1");
+
+            var anchorGo = new GameObject(anchorName);
+            var anchor = anchorGo.transform;
+            anchor.SetParent(rightHandAnchor, false);
+            anchor.localRotation = Quaternion.identity;
+
+            if (thumb != null && index != null)
+            {
+                Vector3 pinchWorld = (thumb.position + index.position) * 0.5f;
+                anchor.position = pinchWorld;
+            }
             else
                 anchor.localPosition = PinchGripLocalOffset;
 

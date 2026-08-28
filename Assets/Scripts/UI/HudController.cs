@@ -10,6 +10,8 @@ namespace MonsterMiner.UI
     {
         string message = string.Empty;
         float messageTimer;
+        string centerMessage = string.Empty;
+        float centerMessageTimer;
         string hatchingMessage = string.Empty;
 
         public void Build() { RefreshSubscriptions(); }
@@ -42,6 +44,12 @@ namespace MonsterMiner.UI
             messageTimer = 3f;
         }
 
+        public void ShowCenterMessage(string text)
+        {
+            centerMessage = text;
+            centerMessageTimer = Mathf.Max(centerMessageTimer, 2f);
+        }
+
         void Update()
         {
             DeathScreenDisplay.HandleInput();
@@ -53,6 +61,13 @@ namespace MonsterMiner.UI
                 messageTimer -= Time.deltaTime;
                 if (messageTimer <= 0f)
                     message = string.Empty;
+            }
+
+            if (centerMessageTimer > 0f)
+            {
+                centerMessageTimer -= Time.deltaTime;
+                if (centerMessageTimer <= 0f)
+                    centerMessage = string.Empty;
             }
         }
 
@@ -83,6 +98,14 @@ namespace MonsterMiner.UI
             HudHatchingDisplay.Draw(hatchingMessage);
             HudEggHitDisplay.Draw();
             CombatHitFeedbackDisplay.Draw(ctx.Player?.ViewCamera);
+
+            if (!DeathScreenDisplay.IsActive
+                && (ctx.Shop == null || !ctx.Shop.IsMenuOpen)
+                && !SellConfirmationDisplay.IsActive
+                && !ctx.IsPlayerDead)
+            {
+                RangedCrosshairDisplay.Draw(ctx);
+            }
 
             if (DeathScreenDisplay.IsActive)
             {
@@ -125,6 +148,19 @@ namespace MonsterMiner.UI
                 GUI.Label(new Rect(Screen.width * 0.5f - 300f, Screen.height - 120f, 600f, 40f), message, bigCenter);
 
             InventoryHotbarDisplay.Draw(ctx);
+
+            if (!string.IsNullOrEmpty(centerMessage))
+            {
+                var warningStyle = new GUIStyle(bigCenter)
+                {
+                    fontSize = 24,
+                    normal = { textColor = new Color(1f, 0.92f, 0.55f) }
+                };
+                GUI.Label(
+                    new Rect(Screen.width * 0.5f - 320f, Screen.height * 0.5f - 24f, 640f, 48f),
+                    centerMessage,
+                    warningStyle);
+            }
         }
 
         static void DrawInteractPrompt(GUIStyle style, string prompt, Camera camera, IInteractPromptBounds boundsTarget)

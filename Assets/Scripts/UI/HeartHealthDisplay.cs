@@ -13,7 +13,9 @@ namespace MonsterMiner.UI
 
         public static void Draw(float currentHealth, float maxHealth)
         {
-            float fill = maxHealth > 0f ? Mathf.Clamp01(currentHealth / maxHealth) : 0f;
+            float fill = maxHealth > 0f
+                ? Mathf.Clamp01(Mathf.Floor(currentHealth) / maxHealth)
+                : 0f;
             float x = HudIconLayout.HeartX;
             float y = HudIconLayout.HeartY;
             float size = HudIconLayout.IconSize;
@@ -39,7 +41,7 @@ namespace MonsterMiner.UI
 
             GUI.color = Color.white;
 
-            HudIconTooltip.DrawPercentRemainingIfHovered(rect, currentHealth, maxHealth);
+            HudIconTooltip.DrawNumericRemainingIfHovered(rect, currentHealth, maxHealth);
         }
 
         static Texture2D GetHeartMask()

@@ -1,4 +1,5 @@
-﻿using MonsterMiner.Core;
+﻿using MonsterMiner.Combat;
+using MonsterMiner.Core;
 using MonsterMiner.Economy;
 using MonsterMiner.Inventory;
 using MonsterMiner.Player;
@@ -47,10 +48,8 @@ namespace MonsterMiner.Core
             var cavernGo = new GameObject("CavernBuilder");
             var builder = cavernGo.AddComponent<CavernBuilder>();
             ctx.CavernBounds = builder.Build(Vector3.zero);
-            ctx.PlayerSpawnPoint = new Vector3(
-                0f,
-                ctx.CavernBounds.FloorTopWorldY + 1.25f,
-                0f);
+            Physics.SyncTransforms();
+            ctx.PlayerSpawnPoint = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
 
             var spawnGo = new GameObject("SpawnManager");
             ctx.SpawnManager = spawnGo.AddComponent<SpawnManager>();
@@ -58,7 +57,6 @@ namespace MonsterMiner.Core
 
             var walletGo = new GameObject("CurrencyWallet");
             ctx.Wallet = walletGo.AddComponent<CurrencyWallet>();
-            ctx.Wallet.Add(10);
 
             var inventoryGo = new GameObject("InventorySystem");
             ctx.Inventory = inventoryGo.AddComponent<InventorySystem>();
@@ -72,11 +70,13 @@ namespace MonsterMiner.Core
             playerGo.transform.localScale = new Vector3(0.8f, 1f, 0.8f);
             Destroy(playerGo.GetComponent<CapsuleCollider>());
             var bodyCollider = playerGo.AddComponent<CapsuleCollider>();
-            bodyCollider.height = 2f;
+            bodyCollider.height = WorldScale.CharacterHeightUnits;
             bodyCollider.center = new Vector3(0f, 0f, 0f);
             var playerRb = playerGo.AddComponent<Rigidbody>();
             playerRb.mass = 70f;
             playerRb.constraints = RigidbodyConstraints.FreezeRotation;
+            playerRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            playerRb.interpolation = RigidbodyInterpolation.Interpolate;
             playerGo.GetComponent<Renderer>().enabled = false;
 
             ctx.Player = playerGo.AddComponent<PlayerController>();
@@ -94,6 +94,7 @@ namespace MonsterMiner.Core
             var hands = playerGo.AddComponent<PlayerHands>();
 
             ctx.PlayerCombat = playerGo.AddComponent<PlayerCombat>();
+            ctx.PlayerRangedAmmo = playerGo.AddComponent<RangedWeaponAmmo>();
             ctx.PlayerCombat.Initialize(ctx.Player, hands);
 
             hands.Initialize(ctx.Player);
@@ -101,12 +102,45 @@ namespace MonsterMiner.Core
             var eggCarrier = playerGo.AddComponent<PlayerEggCarrier>();
             eggCarrier.Initialize(hands, hands.LeftHandAnchor);
 
+            var finderLocator = playerGo.AddComponent<EggFinderLocator>();
+            finderLocator.Initialize();
+
             var input = playerGo.AddComponent<PlayerInput>();
             input.Initialize(interactor, eggCarrier);
 
             playerGo.AddComponent<PlayerCameraShake>();
+            playerGo.AddComponent<GrenadeThrowController>();
+            playerGo.AddComponent<PlateauEdgeGuard>();
+            var wingsFlight = playerGo.AddComponent<PlayerWingsFlight>();
+            wingsFlight.Initialize();
 
             AttachSellStation(builder);
+            StartCoroutine(FinishPlayerSpawn(playerGo, ctx));
+        }
+
+        System.Collections.IEnumerator FinishPlayerSpawn(GameObject playerGo, GameContext ctx)
+        {
+            yield return null;
+            yield return new WaitForFixedUpdate();
+            Physics.SyncTransforms();
+
+            var spawn = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
+            ctx.PlayerSpawnPoint = spawn;
+            if (ctx.Player != null)
+                ctx.Player.Respawn(spawn);
+            else
+                playerGo.transform.position = spawn;
+        }
+
+        static Vector3 ResolvePlayerSpawnPoint(CavernBounds bounds, Vector3 localXZ)
+        {
+            float halfHeight = WorldScale.CharacterHeightUnits * 0.5f;
+            if (bounds.TryResolveFloorWorldPoint(localXZ.x, localXZ.z, out var floorPoint))
+                return floorPoint + Vector3.up * (halfHeight + WorldScale.SpawnDropHeight);
+
+            float floorY = bounds.SampleFloorWorldY(localXZ.x, localXZ.z);
+            var worldXZ = bounds.transform.TransformPoint(new Vector3(localXZ.x, 0f, localXZ.z));
+            return new Vector3(worldXZ.x, floorY + halfHeight + WorldScale.SpawnDropHeight * 2f, worldXZ.z);
         }
 
         void AttachSellStation(CavernBuilder builder)

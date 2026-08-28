@@ -13,11 +13,10 @@ namespace MonsterMiner.UI
         const float BottomMargin = 16f;
         const float BoxSpacing = 8f;
         const float GlovesGapFromHotbar = 100f;
-        const float SlotInset = 8f;
+        const float SlotInset = 1f;
 
-        static readonly Color BoxBackground = new Color(0.08f, 0.08f, 0.1f, 0.88f);
+        static readonly Color EmptySlotBackground = Color.white;
         static readonly Color SelectedBorder = new Color(1f, 0.92f, 0.35f, 1f);
-        static readonly Color EmptyBorder = new Color(0.55f, 0.55f, 0.6f, 0.95f);
         static readonly Color DragHighlight = new Color(1f, 1f, 1f, 0.35f);
 
         static Texture2D pickaxeIcon;
@@ -25,6 +24,7 @@ namespace MonsterMiner.UI
         static GUIStyle numberStyle;
         static GUIStyle bonusStyle;
         static GUIStyle tooltipStyle;
+        static GUIStyle finderNameStyle;
 
         static int? dragSourceIndex;
         static ItemDefinition dragItem;
@@ -60,10 +60,11 @@ namespace MonsterMiner.UI
             {
                 var rect = layout.GetSlotRect(i);
                 slotRects.Add((i, rect));
+                var mousePos = Event.current != null ? Event.current.mousePosition : Vector2.zero;
                 bool isDragTarget = dragSourceIndex.HasValue
                     && dragSourceIndex.Value != i
                     && i != InventorySystem.PickaxeSlotIndex
-                    && rect.Contains(Event.current.mousePosition);
+                    && rect.Contains(mousePos);
                 DrawSlotBox(ctx, rect, i + 1, inventory.Slots[i], i == inventory.SelectedIndex, i == InventorySystem.PickaxeSlotIndex, i, isDragTarget);
             }
 
@@ -74,7 +75,7 @@ namespace MonsterMiner.UI
         {
             var rect = GetGlovesRect(ctx, rowY);
             var gloves = ctx.Inventory.EquippedGloves ?? ctx.Database?.glovesGray;
-            DrawBoxFrame(rect, false, GetGlovesBoxBackground(gloves));
+            DrawBoxFrame(rect, GetGlovesBoxBackground(gloves), Color.clear, 1f);
 
             var iconRect = InsetRect(rect, SlotInset);
             var icon = GetGloveIcon();
@@ -85,11 +86,7 @@ namespace MonsterMiner.UI
             }
 
             if (gloves != null && gloves.miningBonus > 0)
-            {
-                var style = GetBonusStyle();
-                style.alignment = TextAnchor.LowerRight;
-                GUI.Label(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), $"+{gloves.miningBonus}", style);
-            }
+                DrawBonusLabel(rect, $"+{gloves.miningBonus}");
 
             GUI.color = Color.white;
             return rect;
@@ -97,7 +94,7 @@ namespace MonsterMiner.UI
 
         static void DrawTooltips(GameContext ctx, List<(int index, Rect rect)> slotRects, Rect glovesRect)
         {
-            if (Event.current.type != EventType.Repaint)
+            if (Event.current == null || Event.current.type != EventType.Repaint)
                 return;
 
             var mouse = Event.current.mousePosition;
@@ -216,19 +213,18 @@ namespace MonsterMiner.UI
             }
 
             if (dragCount > 1)
-            {
-                var style = GetNumberStyle();
-                style.alignment = TextAnchor.LowerRight;
-                GUI.color = Color.white;
-                GUI.Label(new Rect(rect.x, rect.y, rect.width - 4f, rect.height - 4f), dragCount.ToString(), style);
-            }
+                DrawCountLabel(rect, dragCount.ToString());
 
             GUI.color = Color.white;
         }
 
         static void DrawSlotBox(GameContext ctx, Rect rect, int number, InventorySlot slot, bool selected, bool isPickaxeSlot, int slotIndex, bool dragTarget)
         {
-            DrawBoxFrame(rect, selected, isPickaxeSlot ? GetPickaxeBoxBackground(ctx) : BoxBackground);
+            Color slotBackground = isPickaxeSlot
+                ? GetPickaxeBoxBackground(ctx)
+                : EmptySlotBackground;
+            Color slotBorder = selected ? SelectedBorder : Color.clear;
+            DrawBoxFrame(rect, slotBackground, slotBorder, 1f);
 
             if (dragTarget)
             {
@@ -253,58 +249,158 @@ namespace MonsterMiner.UI
 
                 int pickaxeBonus = ctx.PlayerCombat?.PickaxeMiningTier ?? 0;
                 if (pickaxeBonus > 0)
-                {
-                    var style = GetBonusStyle();
-                    style.alignment = TextAnchor.UpperLeft;
-                    GUI.Label(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), $"+{pickaxeBonus}", style);
-                }
+                    DrawBonusLabel(rect, $"+{pickaxeBonus}");
             }
             else if (!slot.IsEmpty && dragSourceIndex != slotIndex)
             {
+                string creatureTopWord = null;
+                string creatureSecondWord = null;
+                bool drawMeatLabels = InventorySystem.IsMonsterMeat(slot.item)
+                    && TryGetMeatTileCreatureWords(slot.item, out creatureTopWord, out creatureSecondWord);
+                if (drawMeatLabels)
+                    iconRect = InsetIconForMeatLabels(iconRect, !string.IsNullOrEmpty(creatureSecondWord));
+
                 if (!ItemIconUtility.TryDrawIcon(iconRect, slot.item))
                 {
                     GUI.color = slot.item.worldColor;
                     GUI.DrawTexture(iconRect, Texture2D.whiteTexture);
                 }
 
+                if (drawMeatLabels)
+                    DrawMeatTileLabels(rect, creatureTopWord, creatureSecondWord);
+
                 if (slot.count > 1)
-                {
-                    var countStyle = GetNumberStyle();
-                    countStyle.alignment = TextAnchor.LowerRight;
-                    GUI.Label(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), slot.count.ToString(), countStyle);
-                }
+                    DrawCountLabel(rect, slot.count.ToString());
+
+                if (InventorySystem.IsEggFinder(slot.item))
+                    DrawFinderNameLabel(rect, slot.item.displayName);
             }
 
-            DrawSlotNumber(
-                rect,
-                number,
-                isPickaxeSlot ? GetPickaxeBoxBackground(ctx) : BoxBackground);
+            DrawSlotNumber(rect, number);
             GUI.color = Color.white;
         }
 
-        static void DrawBoxFrame(Rect rect, bool selected, Color background)
+        static void DrawBoxFrame(Rect rect, Color background, Color border, float borderThickness)
         {
             GUI.color = background;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
-
-            var border = selected ? SelectedBorder : EmptyBorder;
-            DrawBorder(rect, border, selected ? 2f : 1f);
+            if (border.a > 0.01f)
+                DrawBorder(rect, border, borderThickness);
             GUI.color = Color.white;
         }
 
-        static void DrawSlotNumber(Rect rect, int number, Color background)
+        static void DrawSlotNumber(Rect rect, int number)
         {
+            var numberRect = new Rect(rect.x + 4f, rect.y + rect.height - 22f, 26f, 18f);
             var style = GetNumberStyle();
             style.alignment = TextAnchor.LowerLeft;
-            style.normal.textColor = UsesDarkSlotNumber(background) ? Color.black : Color.white;
-            GUI.Label(new Rect(rect.x + 6f, rect.y + rect.height - 22f, 24f, 18f), number.ToString(), style);
-            style.normal.textColor = Color.white;
+            style.normal.textColor = Color.black;
+            GUI.color = Color.black;
+            GUI.Label(numberRect, number.ToString(), style);
+            GUI.color = Color.white;
         }
 
-        static bool UsesDarkSlotNumber(Color background)
+        static void DrawCountLabel(Rect rect, string text)
         {
-            float luminance = background.r * 0.299f + background.g * 0.587f + background.b * 0.114f;
-            return luminance > 0.72f;
+            var style = GetNumberStyle();
+            style.alignment = TextAnchor.LowerRight;
+            style.normal.textColor = Color.black;
+            GUI.color = Color.black;
+            GUI.Label(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), text, style);
+            GUI.color = Color.white;
+        }
+
+        static void DrawBonusLabel(Rect rect, string text)
+        {
+            var style = GetBonusStyle();
+            style.alignment = TextAnchor.UpperRight;
+            style.normal.textColor = Color.black;
+            GUI.color = Color.black;
+            GUI.Label(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), text, style);
+            GUI.color = Color.white;
+        }
+
+        static void DrawMeatTileLabels(Rect rect, string topWord, string secondWord)
+        {
+            var style = GetMeatLabelStyle();
+            GUI.color = Color.black;
+            style.alignment = TextAnchor.UpperCenter;
+            GUI.Label(new Rect(rect.x + 2f, rect.y + 2f, rect.width - 4f, 12f), topWord, style);
+            if (!string.IsNullOrEmpty(secondWord))
+                GUI.Label(new Rect(rect.x + 2f, rect.y + 13f, rect.width - 4f, 12f), secondWord, style);
+            style.alignment = TextAnchor.LowerCenter;
+            GUI.Label(new Rect(rect.x + 2f, rect.yMax - 16f, rect.width - 4f, 14f), "Meat", style);
+            GUI.color = Color.white;
+        }
+
+        static Rect InsetIconForMeatLabels(Rect iconRect, bool hasSecondWord)
+        {
+            float topInset = hasSecondWord ? 24f : 14f;
+            return new Rect(iconRect.x, iconRect.y + topInset, iconRect.width, iconRect.height - topInset - 14f);
+        }
+
+        static bool TryGetMeatTileCreatureWords(ItemDefinition item, out string topWord, out string secondWord)
+        {
+            topWord = null;
+            secondWord = null;
+            if (item == null || !InventorySystem.IsMonsterMeat(item))
+                return false;
+
+            string creatureId = item.itemId;
+            if (creatureId.EndsWith("_meat"))
+                creatureId = creatureId.Substring(0, creatureId.Length - "_meat".Length);
+
+            string creatureName = ResolveCreatureDisplayName(creatureId);
+            if (string.IsNullOrEmpty(creatureName))
+                creatureName = "Monster";
+
+            int spaceIndex = creatureName.IndexOf(' ');
+            if (spaceIndex > 0)
+            {
+                topWord = creatureName.Substring(0, spaceIndex);
+                secondWord = creatureName.Substring(spaceIndex + 1).Trim();
+            }
+            else
+            {
+                topWord = creatureName;
+            }
+
+            return true;
+        }
+
+        static string ResolveCreatureDisplayName(string creatureTypeId)
+        {
+            if (string.IsNullOrEmpty(creatureTypeId))
+                return string.Empty;
+
+            var monsters = GameContext.Instance?.Database?.monsters;
+            if (monsters == null)
+                return creatureTypeId;
+
+            foreach (var monster in monsters)
+            {
+                if (monster != null && monster.monsterId == creatureTypeId)
+                    return monster.displayName;
+            }
+
+            return creatureTypeId;
+        }
+
+        static void DrawFinderNameLabel(Rect rect, string text)
+        {
+            var labelRect = InsetRect(rect, 6f);
+            var style = GetFinderNameStyle();
+            GUI.color = Color.black;
+            GUI.Label(labelRect, FormatFinderName(text), style);
+            GUI.color = Color.white;
+        }
+
+        static string FormatFinderName(string displayName)
+        {
+            if (string.IsNullOrEmpty(displayName))
+                return displayName;
+
+            return displayName.Replace(' ', '\n');
         }
 
         static void DrawBorder(Rect rect, Color color, float thickness)
@@ -331,7 +427,7 @@ namespace MonsterMiner.UI
             {
                 fontSize = 14,
                 fontStyle = FontStyle.Bold,
-                normal = { textColor = Color.white }
+                normal = { textColor = Color.black }
             };
             return numberStyle;
         }
@@ -345,7 +441,7 @@ namespace MonsterMiner.UI
             {
                 fontSize = 13,
                 fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(1f, 0.92f, 0.35f) }
+                normal = { textColor = Color.black }
             };
             return bonusStyle;
         }
@@ -364,6 +460,32 @@ namespace MonsterMiner.UI
                 normal = { textColor = Color.white }
             };
             return tooltipStyle;
+        }
+
+        static GUIStyle GetMeatLabelStyle()
+        {
+            return new GUIStyle(GetFinderNameStyle())
+            {
+                fontSize = 9,
+                alignment = TextAnchor.UpperCenter
+            };
+        }
+
+        static GUIStyle GetFinderNameStyle()
+        {
+            if (finderNameStyle != null)
+                return finderNameStyle;
+
+            finderNameStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 10,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = false,
+                clipping = TextClipping.Overflow,
+                normal = { textColor = Color.black }
+            };
+            return finderNameStyle;
         }
 
         static Color GetGlovesBoxBackground(ItemDefinition gloves)

@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 8bd7215dd6c525f478292cbc530ac5e8
+timeCreated: 1513631433
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 101318
+  packageName: M1911 - A1 rigged
+  packageVersion: 1.0
+  assetPath: Assets/m1911/m1911_prefab.prefab
+  uploadId: 219625

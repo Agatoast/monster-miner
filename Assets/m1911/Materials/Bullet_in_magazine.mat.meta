@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: a3ea825bd24455f4e91405cada98ba32
+timeCreated: 1506447085
+licenseType: Store
+NativeFormatImporter:
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 101318
+  packageName: M1911 - A1 rigged
+  packageVersion: 1.0
+  assetPath: Assets/m1911/Materials/Bullet_in_magazine.mat
+  uploadId: 219625

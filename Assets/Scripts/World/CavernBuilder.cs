@@ -7,12 +7,7 @@ namespace MonsterMiner.World
 {
     public class CavernBuilder : MonoBehaviour
     {
-        const int WallColliderSegments = 32;
-        const float WallColliderThickness = 0.5f;
-
         Transform contentRoot;
-        Material shellMaterial;
-        Material wallMaterial;
         Material floorMaterial;
 
         public CavernBounds Build(Vector3 center)
@@ -21,63 +16,57 @@ namespace MonsterMiner.World
             contentRoot.SetParent(transform, false);
             contentRoot.position = center;
 
-            shellMaterial = CavernSurfaceMaterialFactory.GetShellMaterial();
             floorMaterial = CavernSurfaceMaterialFactory.GetFloorMaterial();
-            wallMaterial = CavernSurfaceMaterialFactory.GetWallMaterial();
 
             var bounds = contentRoot.gameObject.AddComponent<CavernBounds>();
-            bounds.Radius = 12f;
+            bounds.Radius = WorldScale.Feet(WorldScale.PlateauNominalRadiusFeet);
             bounds.Height = 16f;
             bounds.FloorTopLocalY = 0.25f;
-            bounds.WallThickness = WallColliderThickness;
-            BuildShell(bounds);
-            BuildLighting(bounds);
+            bounds.BowlDepth = 0f;
+            ConfigureShopSpawnExclusions(bounds);
+            BuildPlateau(bounds);
+            BuildLighting();
             BuildShopArea(bounds);
             BuildMinerArea(bounds);
-            CavernInteriorEnforcer.DisableOutsideRenderers(contentRoot, bounds);
             return bounds;
         }
 
-        void BuildLighting(CavernBounds bounds)
+        void BuildLighting()
         {
             var sunGo = new GameObject("SunLight");
             sunGo.transform.SetParent(contentRoot, false);
-            sunGo.transform.localRotation = Quaternion.Euler(48f, -35f, 0f);
+            sunGo.transform.localRotation = Quaternion.Euler(52f, -28f, 0f);
             var sun = sunGo.AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.intensity = 1.05f;
-            sun.color = new Color(0.95f, 0.9f, 0.82f);
+            sun.intensity = 1.35f;
+            sun.color = new Color(1f, 0.96f, 0.86f);
             sun.shadows = LightShadows.Soft;
-
-            var fillGo = new GameObject("CavernFillLight");
-            fillGo.transform.SetParent(contentRoot, false);
-            fillGo.transform.localPosition = new Vector3(0f, bounds.Height - 0.75f, 0f);
-            var fill = fillGo.AddComponent<Light>();
-            fill.type = LightType.Point;
-            fill.range = bounds.Radius * 3.5f;
-            fill.intensity = 1.6f;
-            fill.color = new Color(0.92f, 0.86f, 0.78f);
-            fill.shadows = LightShadows.None;
         }
 
-        void BuildShell(CavernBounds bounds)
+        void BuildPlateau(CavernBounds bounds)
         {
-            float radius = bounds.Radius;
-            float height = bounds.Height;
+            PlainsBiomeVisualFactory.BuildSurroundings(contentRoot, bounds);
+            PlateauCliffBuilder.Build(contentRoot, bounds, PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+        }
 
-            CreateRoundDisc("Floor", new Vector3(0f, -0.25f, 0f), radius, 0.5f, floorMaterial);
-            CreateRoundDisc("Ceiling", new Vector3(0f, height + 0.25f, 0f), radius, 0.5f, shellMaterial);
-            CreateInvertedCylinderWall("WallCylinder", radius, height, wallMaterial);
-            CreateWallCollision(radius, height);
+        static void ConfigureShopSpawnExclusions(CavernBounds bounds)
+        {
+            const float counterLocalZ = -1.1f;
+            float shopAnchorZ = WorldScale.Feet(WorldScale.ShopDistanceFromSpawnFeet);
+            bounds.SetSalesmanEggSpawnExclusion(0f, shopAnchorZ, 20f);
+            bounds.AddSpawnExclusion(
+                -3.3f,
+                3.6f,
+                shopAnchorZ + counterLocalZ - 1.5f,
+                shopAnchorZ + 1.2f);
         }
 
         void BuildShopArea(CavernBounds bounds)
         {
-            const float shopkeeperInsetFromWall = 0.85f;
             const float counterLocalZ = -1.1f;
             const float counterLocalY = 0.6f;
 
-            float shopAnchorZ = bounds.WalkableRadius - shopkeeperInsetFromWall;
+            float shopAnchorZ = WorldScale.Feet(WorldScale.ShopDistanceFromSpawnFeet);
 
             var shopRoot = new GameObject("ShopArea");
             shopRoot.transform.SetParent(contentRoot, false);
@@ -96,7 +85,7 @@ namespace MonsterMiner.World
                 shopRoot.transform,
                 Vector3.zero,
                 Quaternion.Euler(0f, 180f, 0f),
-                bounds.FloorTopWorldY);
+                bounds.SampleFloorWorldY(0f, shopAnchorZ));
 
             var board = PrimitiveFactory.CreatePrimitive(
                 PrimitiveType.Cube,
@@ -116,12 +105,6 @@ namespace MonsterMiner.World
                 shopRoot.transform);
             slotCab.transform.localPosition = new Vector3(2.5f, 1f, counterLocalZ);
 
-            bounds.AddSpawnExclusion(
-                -3.3f,
-                3.6f,
-                shopAnchorZ + counterLocalZ - 1.5f,
-                shopAnchorZ + 1.2f);
-
             var ctx = GameContext.Instance;
             if (ctx != null)
             {
@@ -134,32 +117,85 @@ namespace MonsterMiner.World
 
         void BuildMinerArea(CavernBounds bounds)
         {
-            const float minerInsetFromWall = 2.1f;
-            float minerAnchorZ = -(bounds.WalkableRadius - minerInsetFromWall);
+            const float minerInsetFromEdgeFeet = 10f;
+            const float wingsInsetFromEdgeFeet = 5f;
+            const float wingsDistanceFromMinerFeet = 20f;
+
+            float shopLocalZ = WorldScale.Feet(WorldScale.ShopDistanceFromSpawnFeet);
+            float minerAngle = -Mathf.PI * 0.5f;
+            Vector2 minerXZ = PointInFromPlateauEdge(minerAngle, minerInsetFromEdgeFeet, bounds.Radius);
+            Vector2 wingsXZ = FindPlateauPointNearEdge(
+                minerXZ,
+                wingsDistanceFromMinerFeet,
+                wingsInsetFromEdgeFeet,
+                bounds.Radius);
 
             var minerRoot = new GameObject("MinerArea");
             minerRoot.transform.SetParent(contentRoot, false);
-            minerRoot.transform.localPosition = new Vector3(0f, 0f, minerAnchorZ);
+            minerRoot.transform.localPosition = new Vector3(minerXZ.x, 0f, minerXZ.y);
+
+            var toShop = new Vector3(-minerXZ.x, 0f, shopLocalZ - minerXZ.y);
+            if (toShop.sqrMagnitude < 0.001f)
+                toShop = Vector3.forward;
 
             LowPolyPeopleVisualFactory.CreateMinerNpc(
                 minerRoot.transform,
-                new Vector3(0f, 0f, 0.35f),
-                Quaternion.identity,
-                bounds.FloorTopWorldY);
+                Vector3.zero,
+                Quaternion.LookRotation(toShop),
+                bounds.SampleFloorWorldY(minerXZ.x, minerXZ.y));
 
-            bounds.AddSpawnExclusion(
-                -1.8f,
-                1.8f,
-                minerAnchorZ - 0.4f,
-                minerAnchorZ + 1.4f);
+            AngelWingsVisualFactory.CreateOnGround(
+                contentRoot,
+                bounds.transform.TransformPoint(new Vector3(
+                    wingsXZ.x,
+                    bounds.SampleFloorLocalY(wingsXZ.x, wingsXZ.y),
+                    wingsXZ.y)));
+
+            bounds.AddSpawnExclusion(minerXZ.x - 2f, minerXZ.x + 2f, minerXZ.y - 2f, minerXZ.y + 2f);
+            bounds.AddSpawnExclusion(wingsXZ.x - 2f, wingsXZ.x + 2f, wingsXZ.y - 2f, wingsXZ.y + 2f);
+        }
+
+        static Vector2 PointInFromPlateauEdge(float angleRadians, float insetFeet, float plateauNominalRadius)
+        {
+            float edge = PlateauBoundary.SamplePlateauEdgeDistance(angleRadians, plateauNominalRadius);
+            float distance = Mathf.Max(1f, edge - WorldScale.Feet(insetFeet));
+            return new Vector2(Mathf.Cos(angleRadians), Mathf.Sin(angleRadians)) * distance;
+        }
+
+        static Vector2 FindPlateauPointNearEdge(
+            Vector2 from,
+            float distanceFromSourceFeet,
+            float insetFromEdgeFeet,
+            float plateauNominalRadius)
+        {
+            float targetDistance = WorldScale.Feet(distanceFromSourceFeet);
+            float bestError = float.MaxValue;
+            Vector2 best = from;
+            const int steps = 80;
+            float searchWindow = 0.55f;
+
+            for (int i = 0; i <= steps; i++)
+            {
+                float angle = -Mathf.PI * 0.5f + Mathf.Lerp(-searchWindow, searchWindow, i / (float)steps);
+                Vector2 candidate = PointInFromPlateauEdge(angle, insetFromEdgeFeet, plateauNominalRadius);
+                if (!PlateauBoundary.IsOnPlateau(candidate.x, candidate.y, plateauNominalRadius))
+                    continue;
+
+                float error = Mathf.Abs(Vector2.Distance(from, candidate) - targetDistance);
+                if (error >= bestError)
+                    continue;
+
+                bestError = error;
+                best = candidate;
+            }
+
+            return best;
         }
 
         public void OpenCave2Passage()
         {
             if (contentRoot == null)
                 return;
-
-            OpenWallSegmentNearNegativeZ();
 
             const float cave2CenterZ = -24f;
             const float cave2Radius = 10f;
@@ -173,33 +209,9 @@ namespace MonsterMiner.World
             tunnel.transform.localScale = new Vector3(6f, 0.5f, 13f);
             tunnel.GetComponent<Renderer>().sharedMaterial = floorMaterial;
 
-            var tunnelLightGo = new GameObject("Cave2Light");
-            tunnelLightGo.transform.SetParent(contentRoot, false);
-            tunnelLightGo.transform.localPosition = new Vector3(0f, 6f, cave2CenterZ);
-            var tunnelLight = tunnelLightGo.AddComponent<Light>();
-            tunnelLight.type = LightType.Point;
-            tunnelLight.range = cave2Radius * 2.5f;
-            tunnelLight.intensity = 3.5f;
-            tunnelLight.color = new Color(1f, 0.92f, 0.82f);
-
             var labelGo = new GameObject("Cave2Marker");
             labelGo.transform.SetParent(contentRoot, false);
             labelGo.transform.localPosition = new Vector3(0f, 2f, cave2CenterZ);
-        }
-
-        void OpenWallSegmentNearNegativeZ()
-        {
-            var wallRoot = contentRoot.Find("WallCollision");
-            if (wallRoot == null)
-                return;
-
-            for (int i = wallRoot.childCount - 1; i >= 0; i--)
-            {
-                var segment = wallRoot.GetChild(i);
-                float angleDeg = i / (float)WallColliderSegments * 360f;
-                if (Mathf.Abs(Mathf.DeltaAngle(angleDeg, 270f)) <= 42f)
-                    Destroy(segment.gameObject);
-            }
         }
 
         public void RebuildWalls(CavernBounds bounds)
@@ -210,12 +222,12 @@ namespace MonsterMiner.World
             for (int i = contentRoot.childCount - 1; i >= 0; i--)
             {
                 var child = contentRoot.GetChild(i);
-                if (child.name == "Floor" || child.name == "Ceiling" || child.name == "WallCylinder"
-                    || child.name == "WallCollision" || child.name.StartsWith("Wall"))
+                if (child.name == "PlainsBiome" || child.name == "PlateauBluff"
+                    || child.name == "PlateauCliffs")
                     Destroy(child.gameObject);
             }
 
-            BuildShell(bounds);
+            BuildPlateau(bounds);
         }
 
         void CreateRoundDisc(string name, Vector3 localPos, float radius, float thickness, Material mat)
@@ -232,45 +244,9 @@ namespace MonsterMiner.World
             var box = disc.AddComponent<BoxCollider>();
             box.size = Vector3.one;
             // Align the walkable collider surface with the visible disc top.
-            box.center = name == "Floor"
+            box.center = name == "Floor" || name == "Cave2Floor"
                 ? new Vector3(0f, 0.25f, 0f)
                 : Vector3.zero;
-        }
-
-        void CreateInvertedCylinderWall(string name, float radius, float height, Material mat)
-        {
-            var wall = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            wall.name = name;
-            wall.transform.SetParent(contentRoot, false);
-            wall.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
-            // Negative X scale flips winding so the curved wall faces inward.
-            wall.transform.localScale = new Vector3(-radius * 2f, height * 0.5f, radius * 2f);
-            wall.GetComponent<Renderer>().sharedMaterial = mat;
-            Destroy(wall.GetComponent<Collider>());
-        }
-
-        void CreateWallCollision(float radius, float height)
-        {
-            var root = new GameObject("WallCollision");
-            root.transform.SetParent(contentRoot, false);
-
-            float wallCenterRadius = radius + WallColliderThickness * 0.5f;
-            float segmentWidth = 2f * Mathf.PI * radius / WallColliderSegments * 1.05f;
-            for (int i = 0; i < WallColliderSegments; i++)
-            {
-                float angle = i / (float)WallColliderSegments * Mathf.PI * 2f;
-                float x = Mathf.Cos(angle) * wallCenterRadius;
-                float z = Mathf.Sin(angle) * wallCenterRadius;
-                Vector3 outward = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
-
-                var segment = new GameObject($"WallCollider_{i}");
-                segment.transform.SetParent(root.transform, false);
-                segment.transform.localPosition = new Vector3(x, height * 0.5f, z);
-                segment.transform.localRotation = Quaternion.LookRotation(outward, Vector3.up);
-
-                var box = segment.AddComponent<BoxCollider>();
-                box.size = new Vector3(segmentWidth, height, WallColliderThickness);
-            }
         }
     }
 }

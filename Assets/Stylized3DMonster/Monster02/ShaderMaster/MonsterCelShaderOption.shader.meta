@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: e0b8381432c00a74699c4a9fd5750a6f
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _MainTex: {instanceID: 0}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 329877
+  packageName: Fantasy Monster 3D Model 02 - Game Ready - PixeliusVita
+  packageVersion: 1.0
+  assetPath: Assets/Stylized3DMonster/Monster02/ShaderMaster/MonsterCelShaderOption.shader
+  uploadId: 803670

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 88ad6382600040b4d91293bf2dd601f4
+timeCreated: 1478092294
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 75299
+  packageName: Medieval Weapons PBR Pack
+  packageVersion: 1.0
+  assetPath: Assets/Medieval_Weapons/Sword/Materials/Sword.mat
+  uploadId: 195359

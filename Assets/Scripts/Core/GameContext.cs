@@ -17,6 +17,7 @@ namespace MonsterMiner.Core
         public PlayerHealth PlayerHealth { get; set; }
         public PlayerThirst PlayerThirst { get; set; }
         public PlayerCombat PlayerCombat { get; set; }
+        public RangedWeaponAmmo PlayerRangedAmmo { get; set; }
         public InventorySystem Inventory { get; set; }
         public CurrencyWallet Wallet { get; set; }
         public SpawnManager SpawnManager { get; set; }

@@ -11,28 +11,31 @@ namespace MonsterMiner.World
 
     public class MonsterEgg : MonoBehaviour, IInteractable
     {
-        const float MaxHealth = 15f;
-        const float HatchDelaySeconds = 10f;
+        public const int BasePickaxeHits = 15;
+        const float MaxHealth = BasePickaxeHits;
+        const float HatchDelayMinSeconds = 1f;
+        const float HatchDelayMaxSeconds = 5f;
 
         float currentHealth;
         float hatchTimer;
         EggState state = EggState.Idle;
         bool isCarried;
         MonsterDefinition hatchDefinition;
+        string creatureTypeId;
         Collider eggCollider;
 
         public EggState State => state;
         public bool IsCarried => isCarried;
         public bool IsHatching => state == EggState.Hatching;
+        public string CreatureTypeId => creatureTypeId;
 
         public static MonsterEgg Spawn(Vector3 floorContactPoint, MonsterDefinition hatchDefinition)
         {
-            var go = EggVisualFactory.CreateWorldEgg(floorContactPoint);
-            FloorAnchor.SnapBottomToFloor(go, floorContactPoint.y, 0.01f);
-
             var bounds = GameContext.Instance?.CavernBounds;
-            if (bounds != null)
+            var go = EggVisualFactory.CreateWorldEgg(floorContactPoint);
+            if (ShouldEnforcePlateauShell(go, bounds))
                 CavernInteriorEnforcer.EnsureInsideShell(go, bounds);
+            FloorAnchor.PlaceOnFloor(go, go.transform.position, bounds);
 
             var egg = go.GetComponent<MonsterEgg>();
             if (egg == null)
@@ -44,8 +47,48 @@ namespace MonsterMiner.World
         void Initialize(MonsterDefinition definition)
         {
             hatchDefinition = definition;
+            creatureTypeId = definition?.monsterId;
             currentHealth = MaxHealth;
             eggCollider = GetComponent<Collider>();
+            RefreshEggSkin();
+        }
+
+        public void SetCreatureTypeId(string typeId)
+        {
+            creatureTypeId = typeId;
+            RefreshEggSkin();
+        }
+
+        void RefreshEggSkin()
+        {
+            if (!IsBossEgg())
+                return;
+
+            EggMaterialFactory.ApplyGoldDragonScaleMaterial(gameObject);
+        }
+
+        bool IsBossEgg()
+        {
+            if (string.IsNullOrEmpty(creatureTypeId))
+                return hatchDefinition != null && hatchDefinition.isQuestBoss;
+
+            var monsters = GameContext.Instance?.Database?.monsters;
+            if (monsters == null)
+                return false;
+
+            foreach (var monster in monsters)
+            {
+                if (monster != null && monster.monsterId == creatureTypeId)
+                    return monster.isQuestBoss;
+            }
+
+            return false;
+        }
+
+        public bool MatchesFinderTarget(string targetCreatureId)
+        {
+            return !string.IsNullOrEmpty(targetCreatureId)
+                && creatureTypeId == targetCreatureId;
         }
 
         void Update()
@@ -74,7 +117,7 @@ namespace MonsterMiner.World
         void BeginHatching()
         {
             state = EggState.Hatching;
-            hatchTimer = HatchDelaySeconds;
+            hatchTimer = Random.Range(HatchDelayMinSeconds, HatchDelayMaxSeconds);
             GameContext.Instance?.Hud?.ShowHatchingMessage("It's hatching!");
         }
 
@@ -123,10 +166,10 @@ namespace MonsterMiner.World
                 floorPoint = worldPosition;
 
             transform.position = floorPoint;
-            FloorAnchor.SnapBottomToFloor(gameObject, floorPoint.y, 0.01f);
+            FloorAnchor.PlaceOnFloor(gameObject, floorPoint);
 
             var bounds = GameContext.Instance?.CavernBounds;
-            if (bounds != null)
+            if (ShouldEnforcePlateauShell(gameObject, bounds))
                 CavernInteriorEnforcer.EnsureInsideShell(gameObject, bounds);
 
             if (eggCollider != null)
@@ -142,8 +185,17 @@ namespace MonsterMiner.World
                 ctx?.Player?.GetComponent<PlayerEggCarrier>()?.ForceReleaseWithoutDrop();
 
             ctx?.Hud?.ClearHatchingMessage();
-            ctx?.SpawnManager?.HatchMonster(pos, hatchDefinition);
+            ctx?.SpawnManager?.HatchMonster(pos, hatchDefinition, creatureTypeId);
             Destroy(gameObject);
+        }
+
+        static bool ShouldEnforcePlateauShell(GameObject root, CavernBounds bounds)
+        {
+            if (root == null || bounds == null)
+                return false;
+
+            var local = bounds.transform.InverseTransformPoint(root.transform.position);
+            return PlateauBoundary.IsOnPlateau(local.x, local.z, bounds.Radius);
         }
     }
 }

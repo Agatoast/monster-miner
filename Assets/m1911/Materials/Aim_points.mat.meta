@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 2c6a64e6566602342a8966c19bc0ff3e
+timeCreated: 1506447085
+licenseType: Store
+NativeFormatImporter:
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 101318
+  packageName: M1911 - A1 rigged
+  packageVersion: 1.0
+  assetPath: Assets/m1911/Materials/Aim_points.mat
+  uploadId: 219625
