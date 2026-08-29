@@ -1,4 +1,5 @@
 using MonsterMiner.Inventory;
+using MonsterMiner.Player;
 using UnityEngine;
 
 namespace MonsterMiner.World
@@ -85,7 +86,8 @@ namespace MonsterMiner.World
         {
             return renderer.GetComponentInParent<MonsterEgg>() != null
                 || renderer.GetComponentInParent<WorldPickup>() != null
-                || renderer.GetComponentInParent<EggFinderMarker>() != null;
+                || renderer.GetComponentInParent<EggFinderMarker>() != null
+                || renderer.GetComponentInParent<DriveableTruck>() != null;
         }
 
         static bool IsShellRenderer(Renderer renderer)
@@ -97,12 +99,14 @@ namespace MonsterMiner.World
                 if (name == "PlainsGround" || name == "PlainsGroundTopCollision"
                     || name == "PlainsGroundSolid" || name == "PlainsGroundCollision"
                     || name == "MinerArea" || name == "MinerNpc"
-                    || name == "AngelWings" || name == "EquippedAngelWings" || name == "LowerWorld"
-                    || name == "LowerPlainsGround" || name == "LowerTreeCopses" || name == "CliffWalls"
-                    || name == "PlateauCliffWalls")
+                    || name == "AngelWings" || name == "EquippedAngelWings" || name == "PlainsWorld"
+                    || name == "PlainsGround" || name == "PlainsGroundCollision"
+                    || name == "PlainsTreeCopses" || name == "PlainsRocks" || name == "CliffWalls"
+                    || name == "PlateauCliffWalls" || name == "PlayerTruck" || name == "LandQuarry2")
                     return true;
                 if (name.StartsWith("PlainsGroundCollider_") || name.StartsWith("Tree_") || name.StartsWith("Copse_")
-                    || name.StartsWith("Trunk") || name.StartsWith("Foliage"))
+                    || name.StartsWith("Trunk") || name.StartsWith("Foliage") || name.StartsWith("LandChunk_")
+                    || name.StartsWith("PlainsRock_"))
                     return true;
                 transform = transform.parent;
             }

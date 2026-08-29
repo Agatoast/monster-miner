@@ -1,3 +1,4 @@
+using MonsterMiner.Core;
 using MonsterMiner.World;
 using UnityEngine;
 
@@ -15,8 +16,9 @@ namespace MonsterMiner.Util
             if (wings == null)
                 return null;
 
-            wings.transform.position = floorContactPoint;
-            FloorAnchor.SnapBottomToFloor(wings, floorContactPoint.y);
+            FloorAnchor.PlaceOnFloor(wings, floorContactPoint, GameContext.Instance?.CavernBounds);
+            wings.transform.position += Vector3.up * WorldScale.Feet(0.5f);
+            Physics.SyncTransforms();
             AddGroundInteractCollider(wings);
             return wings;
         }
@@ -27,9 +29,30 @@ namespace MonsterMiner.Util
             if (wings == null)
                 return null;
 
-            wings.transform.localPosition = EquippedLocalPosition;
-            wings.transform.localRotation = Quaternion.Euler(EquippedLocalEuler);
+            ApplyEquippedLocalPose(wings.transform);
             return wings;
+        }
+
+        public static bool TryAttachWorldWingsToPlayer(GameObject worldWings, Transform player)
+        {
+            if (worldWings == null || player == null)
+                return false;
+
+            var pickup = worldWings.GetComponent<AngelWingsPickup>();
+            if (pickup != null)
+                Object.Destroy(pickup);
+
+            DisableColliders(worldWings);
+            worldWings.transform.SetParent(player, false);
+            ApplyEquippedLocalPose(worldWings.transform);
+            worldWings.name = "EquippedAngelWings";
+            return true;
+        }
+
+        static void ApplyEquippedLocalPose(Transform wingsTransform)
+        {
+            wingsTransform.localPosition = EquippedLocalPosition;
+            wingsTransform.localRotation = Quaternion.Euler(EquippedLocalEuler);
         }
 
         static GameObject CreateWings(string name, Transform parent)
@@ -51,18 +74,8 @@ namespace MonsterMiner.Util
         static void AddGroundInteractCollider(GameObject wings)
         {
             var box = wings.AddComponent<BoxCollider>();
-            var renderers = wings.GetComponentsInChildren<Renderer>();
-            if (renderers.Length > 0)
-            {
-                var bounds = renderers[0].bounds;
-                for (int i = 1; i < renderers.Length; i++)
-                    bounds.Encapsulate(renderers[i].bounds);
-
-                box.center = wings.transform.InverseTransformPoint(bounds.center);
-                Vector3 size = wings.transform.InverseTransformVector(bounds.size);
-                box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
-            }
-
+            box.center = new Vector3(0f, WorldScale.Feet(3.5f), 0f);
+            box.size = new Vector3(WorldScale.Feet(5f), WorldScale.Feet(7f), WorldScale.Feet(5f));
             box.isTrigger = true;
             wings.AddComponent<AngelWingsPickup>();
         }

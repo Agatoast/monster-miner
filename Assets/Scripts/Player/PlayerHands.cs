@@ -392,6 +392,9 @@ namespace MonsterMiner.Player
             if (slot == null || slot.IsEmpty)
                 return;
 
+            if (InventorySystem.IsBossDrop(slot.item))
+                return;
+
             if (slot.item.itemId == "shiny_pebble")
             {
                 heldVisual = PebbleVisualFactory.CreateHeldPebble(GetLeftHandAnchor(), HeldPebbleLocalPosition).transform;
@@ -448,7 +451,7 @@ namespace MonsterMiner.Player
                 if (hands != null && hands.HasMesh)
                     heldItemAnchor = hands.SpearGripAnchor;
 
-                var spear = SpearVisualFactory.CreateHeldSpear(heldItemAnchor);
+                var spear = SpearVisualFactory.CreateHeldSpear(heldItemAnchor, slot.item);
                 if (spear != null)
                 {
                     heldVisual = spear.transform;
@@ -460,7 +463,7 @@ namespace MonsterMiner.Player
 
             if (InventorySystem.IsGrenadeItem(slot.item))
             {
-                var grenade = GrenadeVisualFactory.CreateHeldGrenade(heldItemAnchor);
+                var grenade = GrenadeVisualFactory.CreateHeldGrenade(heldItemAnchor, slot.item);
                 if (grenade != null)
                 {
                     heldVisual = grenade.transform;
@@ -474,7 +477,7 @@ namespace MonsterMiner.Player
                 if (hands != null && hands.HasMesh)
                     heldItemAnchor = hands.KnifeGripAnchor;
 
-                var pistol = PistolVisualFactory.CreateHeldPistol(heldItemAnchor);
+                var pistol = PistolVisualFactory.CreateHeldPistol(heldItemAnchor, slot.item);
                 if (pistol != null)
                 {
                     heldVisual = pistol.transform;
@@ -489,7 +492,7 @@ namespace MonsterMiner.Player
                 if (hands != null && hands.HasMesh)
                     heldItemAnchor = hands.PickaxeGripAnchor;
 
-                var shotgun = ShotgunVisualFactory.CreateHeldShotgun(heldItemAnchor);
+                var shotgun = ShotgunVisualFactory.CreateHeldShotgun(heldItemAnchor, slot.item);
                 if (shotgun != null)
                 {
                     heldVisual = shotgun.transform;
@@ -504,7 +507,7 @@ namespace MonsterMiner.Player
                 if (hands != null && hands.HasMesh)
                     heldItemAnchor = hands.PickaxeGripAnchor;
 
-                var rifle = RifleVisualFactory.CreateHeldRifle(heldItemAnchor);
+                var rifle = RifleVisualFactory.CreateHeldRifle(heldItemAnchor, slot.item);
                 if (rifle != null)
                 {
                     heldVisual = rifle.transform;
@@ -519,7 +522,7 @@ namespace MonsterMiner.Player
                 if (hands != null && hands.HasMesh)
                     heldItemAnchor = hands.PickaxeGripAnchor;
 
-                var machineGun = MachineGunVisualFactory.CreateHeldMachineGun(heldItemAnchor);
+                var machineGun = MachineGunVisualFactory.CreateHeldMachineGun(heldItemAnchor, slot.item);
                 if (machineGun != null)
                 {
                     heldVisual = machineGun.transform;

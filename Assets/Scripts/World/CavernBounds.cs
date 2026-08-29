@@ -31,6 +31,18 @@ namespace MonsterMiner.World
 
         public float SampleFloorLocalY(float localX, float localZ)
         {
+            if (!PlateauBoundary.IsOnPlateau(localX, localZ, Radius) && !IsInCave2Zone(localX, localZ))
+            {
+                Vector3 worldOnXZ = transform.TransformPoint(new Vector3(localX, 0f, localZ));
+                worldOnXZ.y = CreatureSurfaceSampler.SampleWorldY(this, localX, localZ);
+                return transform.InverseTransformPoint(worldOnXZ).y;
+            }
+
+            return SamplePlateauFloorLocalY(localX, localZ);
+        }
+
+        public float SamplePlateauFloorLocalY(float localX, float localZ)
+        {
             return PlainsGroundBuilder.SampleGroundLocalY(
                 localX,
                 localZ,
@@ -38,6 +50,11 @@ namespace MonsterMiner.World
                 FloorTopLocalY,
                 BowlDepth,
                 PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+        }
+
+        public float SamplePlateauFloorWorldY(float localX, float localZ)
+        {
+            return transform.TransformPoint(new Vector3(localX, SamplePlateauFloorLocalY(localX, localZ), localZ)).y;
         }
 
         public float SampleFloorWorldY(float localX, float localZ)
@@ -276,10 +293,16 @@ namespace MonsterMiner.World
             if (IsInCave2Zone(localX, localZ))
                 return true;
 
-            return PlateauBoundary.IsOnPlateau(localX, localZ, Radius);
+            if (PlateauBoundary.IsOnPlateau(localX, localZ, Radius))
+                return true;
+
+            float angle = Mathf.Atan2(localZ, localX);
+            float distance = new Vector2(localX, localZ).magnitude;
+            float edge = PlateauBoundary.SamplePlateauEdgeDistance(angle, Radius);
+            return distance >= edge - WorldScale.Feet(1f);
         }
 
-        bool IsInCave2Zone(float localX, float localZ)
+        public bool IsInCave2ZoneLocal(float localX, float localZ)
         {
             if (!cave2Unlocked)
                 return false;
@@ -288,6 +311,11 @@ namespace MonsterMiner.World
                 && localZ >= -34f
                 && Mathf.Abs(localX) <= 11.5f;
         }
+
+        bool IsInCave2Zone(float localX, float localZ) => IsInCave2ZoneLocal(localX, localZ);
+
+        public bool IsClearForSpawnAt(Vector3 floorPoint, float clearanceRadius) =>
+            IsClearForSpawn(floorPoint, clearanceRadius);
 
         bool IsClearForSpawn(Vector3 floorPoint, float clearanceRadius)
         {

@@ -1,3 +1,4 @@
+using MonsterMiner.Data;
 using UnityEngine;
 
 namespace MonsterMiner.Util
@@ -13,9 +14,12 @@ namespace MonsterMiner.Util
 
         static GameObject templateRoot;
 
-        public static GameObject CreateHeldGrenade(Transform parent)
+        public static GameObject CreateHeldGrenade(Transform parent, ItemDefinition item = null)
         {
-            return CreateVisual(parent, HeldLocalPosition, Quaternion.Euler(HeldLocalEuler), HeldLocalScale, "HeldGrenade");
+            var grenade = CreateVisual(parent, HeldLocalPosition, Quaternion.Euler(HeldLocalEuler), HeldLocalScale, "HeldGrenade");
+            if (grenade != null)
+                KnifeVisualFactory.ApplyLegendaryGoldMaterialsIfNeeded(grenade, item);
+            return grenade;
         }
 
         public static GameObject CreateWorldGrenade(Vector3 position, Quaternion rotation, Vector3 scale, Transform parent = null)

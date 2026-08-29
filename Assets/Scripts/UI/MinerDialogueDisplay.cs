@@ -7,7 +7,7 @@ namespace MonsterMiner.UI
     {
         const float PanelWidth = 720f;
         const float PanelPadding = 16f;
-        const string PhoenixHeartPhrase = "Heart of the Pentachick";
+        const string PhoenixHeartPhrase = "Heart of a Pentachick";
         static readonly Color PanelBackground = new Color(0f, 0f, 0f, 0.88f);
         static readonly Color HighlightOrange = new Color(1f, 0.55f, 0.12f);
 

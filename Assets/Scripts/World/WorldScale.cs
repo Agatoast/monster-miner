@@ -35,6 +35,8 @@ namespace MonsterMiner.World
 
         public static float Feet(float feet) => feet / FeetPerUnit;
 
+        public static float Miles(float miles) => Feet(miles * FeetPerMile);
+
         public static float MilesPerHour(float mph)
         {
             float feetPerSecond = mph * FeetPerMile / SecondsPerHour;

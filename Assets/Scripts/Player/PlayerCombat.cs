@@ -47,7 +47,7 @@ namespace MonsterMiner.Player
             if (GameContext.Instance?.Shop?.IsMenuOpen == true)
                 return;
 
-            if (SellConfirmationDisplay.IsActive)
+            if (SellConfirmationDisplay.IsActive || WorldMapDisplay.IsActive)
                 return;
 
             if (GrenadeThrowController.IsGrenadeEquipped)
@@ -93,7 +93,7 @@ namespace MonsterMiner.Player
             if (string.IsNullOrEmpty(weaponId) || !RangedWeaponStats.TryGetConfig(weaponId, out var config))
                 return false;
 
-            bool wantsFire = weaponId == "machinegun"
+            bool wantsFire = InventorySystem.ResolveBaseWeaponId(weaponId) == "machinegun"
                 ? Input.GetMouseButtonDown(0)
                 : Input.GetMouseButton(0);
 
@@ -116,14 +116,19 @@ namespace MonsterMiner.Player
             if (controller?.ViewCamera == null)
                 return;
 
+            float damage = config.DamagePerShot;
+            var selected = GameContext.Instance?.Inventory?.GetSelectedSlot();
+            if (selected != null && !selected.IsEmpty && selected.item != null && selected.item.isLegendary)
+                damage += 1f;
+
             if (config.HitsAllInView)
             {
-                PerformShotgunAttack(config.DamagePerShot);
+                PerformShotgunAttack(damage);
                 return;
             }
 
             for (int i = 0; i < shotsFired; i++)
-                PerformSingleShotAttack(config.DamagePerShot);
+                PerformSingleShotAttack(damage);
         }
 
         void PerformSingleShotAttack(float damage)
@@ -238,7 +243,7 @@ namespace MonsterMiner.Player
             if (selected == null || selected.IsEmpty || !InventorySystem.IsWeaponItem(selected.item))
                 return 1f;
 
-            return Mathf.Max(1f, selected.item.weaponDamage);
+            return Mathf.Max(1f, InventorySystem.GetWeaponDamage(selected.item));
         }
     }
 }

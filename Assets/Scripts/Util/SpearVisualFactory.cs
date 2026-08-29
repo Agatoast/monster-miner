@@ -1,3 +1,4 @@
+using MonsterMiner.Data;
 using UnityEngine;
 
 namespace MonsterMiner.Util
@@ -13,7 +14,7 @@ namespace MonsterMiner.Util
         public static Vector3 ScaledMeshCenter => scaledMeshCenter;
         public static Quaternion HeldMeshLocalRotation => Quaternion.Euler(HeldLocalEuler);
 
-        public static GameObject CreateHeldSpear(Transform parent)
+        public static GameObject CreateHeldSpear(Transform parent, ItemDefinition item = null)
         {
             var prefab = Resources.Load<GameObject>(PrefabResourcePath);
             if (prefab == null)
@@ -29,6 +30,7 @@ namespace MonsterMiner.Util
             spear.transform.localPosition = Vector3.zero;
             scaledMeshCenter = ComputeScaledMeshCenter(spear);
             ApplyUrpMaterials(spear);
+            KnifeVisualFactory.ApplyLegendaryGoldMaterialsIfNeeded(spear, item);
             DisableColliders(spear);
             return spear;
         }

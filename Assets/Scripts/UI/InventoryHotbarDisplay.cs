@@ -65,7 +65,7 @@ namespace MonsterMiner.UI
                     && dragSourceIndex.Value != i
                     && i != InventorySystem.PickaxeSlotIndex
                     && rect.Contains(mousePos);
-                DrawSlotBox(ctx, rect, i + 1, inventory.Slots[i], i == inventory.SelectedIndex, i == InventorySystem.PickaxeSlotIndex, i, isDragTarget);
+                DrawSlotBox(ctx, rect, i + 1, inventory.Slots[i], i == inventory.SelectedIndex, inventory.IsReservedSlotIndex(i), i, isDragTarget);
             }
 
             return slotRects;
@@ -161,7 +161,7 @@ namespace MonsterMiner.UI
                         continue;
 
                     inventory.SelectSlot(index);
-                    if (index == InventorySystem.PickaxeSlotIndex)
+                    if (inventory.IsReservedSlotIndex(index))
                         break;
 
                     var slot = inventory.Slots[index];

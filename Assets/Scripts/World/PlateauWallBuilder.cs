@@ -62,7 +62,7 @@ namespace MonsterMiner.World
                         floorTopLocalY,
                         bowlDepth,
                         plainsBaseLocalY);
-                    float bottomY = LowerWorldBuilder.SampleLowerPlainsLocalY(x, z, lowerBaseLocalY);
+                    float bottomY = PlainsWorldBuilder.SamplePlainsLocalY(x, z, lowerBaseLocalY);
                     float y = Mathf.Lerp(topY, bottomY, descentT);
 
                     float rock = Mathf.PerlinNoise(x * 0.07f + 18.4f, z * 0.07f + 6.1f + descentT * 2.4f);

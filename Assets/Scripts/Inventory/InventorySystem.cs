@@ -18,6 +18,7 @@ namespace MonsterMiner.Inventory
     public class InventorySystem : MonoBehaviour
     {
         public const int PickaxeSlotIndex = 0;
+        public const int SlotTestTokenSlotIndex = 6;
 
         readonly List<InventorySlot> slots = new();
         int selectedIndex;
@@ -53,6 +54,38 @@ namespace MonsterMiner.Inventory
             OnInventoryChanged?.Invoke();
         }
 
+        public void EnsureSlotTestToken(ItemDefinition token)
+        {
+            if (token == null)
+                return;
+
+            while (slots.Count <= SlotTestTokenSlotIndex)
+                ExpandSlots(1);
+
+            AssignSlot(SlotTestTokenSlotIndex, token, 1);
+        }
+
+        public void AssignSlot(int index, ItemDefinition item, int count = 1)
+        {
+            if (item == null || index < 0 || count <= 0)
+                return;
+
+            if (index == PickaxeSlotIndex)
+            {
+                SetReservedPickaxe(item);
+                return;
+            }
+
+            while (slots.Count <= index)
+                ExpandSlots(1);
+
+            var slot = slots[index];
+            slot.item = item;
+            slot.count = count;
+            slot.fromShopPurchase = false;
+            OnInventoryChanged?.Invoke();
+        }
+
         public void EnsureStarterPickaxeIfMissing(ItemDefinition pickaxe)
         {
             if (pickaxe == null || slots.Count == 0 || !slots[PickaxeSlotIndex].IsEmpty)
@@ -61,6 +94,11 @@ namespace MonsterMiner.Inventory
             SetReservedPickaxe(pickaxe);
             selectedIndex = PickaxeSlotIndex;
             OnSelectedChanged?.Invoke(selectedIndex);
+        }
+
+        public bool IsReservedSlotIndex(int index)
+        {
+            return index == PickaxeSlotIndex;
         }
 
         public InventorySlot GetSelectedSlot()
@@ -293,6 +331,8 @@ namespace MonsterMiner.Inventory
             var slot = GetSelectedSlot();
             if (slot == null || slot.IsEmpty || slot.count < amount)
                 return false;
+            if (IsSlotTestToken(slot.item))
+                return false;
             slot.count -= amount;
             if (slot.count <= 0)
             {
@@ -417,7 +457,7 @@ namespace MonsterMiner.Inventory
             for (int i = 0; i < slots.Count; i++)
             {
                 var slot = slots[i];
-                if (slot.IsEmpty)
+                if (slot.IsEmpty || IsSlotTestToken(slot.item))
                     continue;
 
                 for (int n = 0; n < slot.count; n++)
@@ -460,7 +500,34 @@ namespace MonsterMiner.Inventory
             return item != null
                 && item.category == ItemCategory.Weapon
                 && item.itemId != null
-                && item.itemId.StartsWith("knife");
+                && (item.itemId.StartsWith("knife") || item.itemId == "legendary_blade");
+        }
+
+        public static string ResolveBaseWeaponId(ItemDefinition item) =>
+            item == null ? null : ResolveBaseWeaponId(item.itemId);
+
+        public static string ResolveBaseWeaponId(string weaponId)
+        {
+            if (string.IsNullOrEmpty(weaponId))
+                return weaponId;
+
+            if (weaponId == "legendary_blade")
+                return "knife";
+
+            const string prefix = "legendary_";
+            return weaponId.StartsWith(prefix) ? weaponId.Substring(prefix.Length) : weaponId;
+        }
+
+        public static float GetWeaponDamage(ItemDefinition item)
+        {
+            if (item == null || item.weaponDamage <= 0)
+                return 0f;
+
+            float damage = item.weaponDamage;
+            if (item.isLegendary)
+                damage += 1f;
+
+            return damage;
         }
 
         public static bool IsWeaponItem(ItemDefinition item)
@@ -471,30 +538,39 @@ namespace MonsterMiner.Inventory
                 && !IsGrenadeItem(item);
         }
 
-        public static bool IsGrenadeItem(ItemDefinition item) => item != null && item.itemId == "grenade";
+        public static bool IsGrenadeItem(ItemDefinition item) =>
+            item != null && ResolveBaseWeaponId(item) == "grenade";
 
         public static bool IsRangedWeaponItem(ItemDefinition item)
         {
             if (item == null)
                 return false;
 
-            return item.itemId == "pistol"
-                || item.itemId == "shotgun"
-                || item.itemId == "rifle"
-                || item.itemId == "machinegun";
+            return ResolveBaseWeaponId(item) switch
+            {
+                "pistol" or "shotgun" or "rifle" or "machinegun" => true,
+                _ => false,
+            };
         }
 
-        public static bool IsSpearItem(ItemDefinition item) => item != null && item.itemId == "spear";
+        public static bool IsSpearItem(ItemDefinition item) =>
+            item != null && ResolveBaseWeaponId(item) == "spear";
 
-        public static bool IsMachineGunItem(ItemDefinition item) => item != null && item.itemId == "machinegun";
+        public static bool IsMachineGunItem(ItemDefinition item) =>
+            item != null && ResolveBaseWeaponId(item) == "machinegun";
 
-        public static bool IsPistolItem(ItemDefinition item) => item != null && item.itemId == "pistol";
+        public static bool IsPistolItem(ItemDefinition item) =>
+            item != null && ResolveBaseWeaponId(item) == "pistol";
 
-        public static bool IsShotgunItem(ItemDefinition item) => item != null && item.itemId == "shotgun";
+        public static bool IsShotgunItem(ItemDefinition item) =>
+            item != null && ResolveBaseWeaponId(item) == "shotgun";
 
-        public static bool IsRifleItem(ItemDefinition item) => item != null && item.itemId == "rifle";
+        public static bool IsRifleItem(ItemDefinition item) =>
+            item != null && ResolveBaseWeaponId(item) == "rifle";
 
         public static bool IsPentachickHeart(ItemDefinition item) => item != null && item.itemId == "pentachick_heart";
+
+        public static bool IsBossDrop(ItemDefinition item) => item != null && item.isBossDrop;
 
         public static bool IsMonsterMeat(ItemDefinition item) =>
             item != null && item.isMonsterDrop && item.isEdible && item.category == ItemCategory.Drop && item.itemId != "rare_core";
@@ -530,6 +606,9 @@ namespace MonsterMiner.Inventory
 
             return null;
         }
+
+        public static bool IsSlotTestToken(ItemDefinition item) =>
+            item != null && item.isSlotTestToken;
 
         public static bool IsEggFinder(ItemDefinition item) => item != null && item.isEggFinder;
 

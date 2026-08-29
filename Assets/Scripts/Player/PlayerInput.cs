@@ -1,5 +1,6 @@
 ﻿using MonsterMiner.Core;
 using MonsterMiner.Economy;
+using MonsterMiner.UI;
 using UnityEngine;
 
 namespace MonsterMiner.Player
@@ -8,16 +9,21 @@ namespace MonsterMiner.Player
     {
         Interactor interactor;
         PlayerEggCarrier eggCarrier;
+        PlayerCreatureCarrier creatureCarrier;
 
-        public void Initialize(Interactor playerInteractor, PlayerEggCarrier carrier)
+        public void Initialize(Interactor playerInteractor, PlayerEggCarrier carrier, PlayerCreatureCarrier creature)
         {
             interactor = playerInteractor;
             eggCarrier = carrier;
+            creatureCarrier = creature;
         }
 
         void Update()
         {
             if (PlayerController.IsGameplayBlocked())
+                return;
+
+            if (WorldMapDisplay.IsActive)
                 return;
 
             if (Input.GetKeyDown(KeyCode.E))
@@ -28,6 +34,19 @@ namespace MonsterMiner.Player
                 if (eggCarrier != null && eggCarrier.IsCarryingEgg)
                 {
                     eggCarrier.DropEgg();
+                    return;
+                }
+
+                if (creatureCarrier != null && creatureCarrier.IsCarrying)
+                {
+                    creatureCarrier.ThrowCarriedCreature();
+                    return;
+                }
+
+                var vehicleMount = GetComponent<PlayerVehicleMount>();
+                if (vehicleMount != null && vehicleMount.IsMounted)
+                {
+                    vehicleMount.TryDismount();
                     return;
                 }
 

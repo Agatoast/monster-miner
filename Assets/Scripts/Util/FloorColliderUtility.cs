@@ -14,12 +14,13 @@ namespace MonsterMiner.Util
             {
                 string name = transform.name;
                 if (name == "Floor" || name == "Cave2Floor" || name == "Cave2TunnelFloor"
-                    || name == "FloorCollision" || name == "PlainsGroundTopCollision"
-                    || name == "PlainsGroundCollision" || name == "FloorCenterCap"
-                    || name == "LowerPlainsGround" || name == "LowerPlainsGroundCollision"
-                    || name == "PlateauCliffWalls")
+                    || name == "FloorCollision"                     || name == "PlainsGroundTopCollision" || name == "PlainsGroundCollision"
+                    || name == "FloorCenterCap"
+                    || name == "PlainsGround"
+                    || name == "PlainsColliderGrid" || name == "PlateauCliffWalls")
                     return true;
-                if (name.StartsWith("FloorCollider_") || name.StartsWith("PlainsGroundCollider_"))
+                if (name.StartsWith("FloorCollider_") || name.StartsWith("PlainsGroundCollider_")
+                    || name.StartsWith("PlainsGroundCell_"))
                     return true;
                 transform = transform.parent;
             }
@@ -41,6 +42,8 @@ namespace MonsterMiner.Util
             for (int i = 0; i < hits.Length; i++)
             {
                 if (!IsFloorCollider(hits[i].collider))
+                    continue;
+                if (hits[i].normal.y < 0.35f)
                     continue;
 
                 if (best < 0 || hits[i].point.y > hits[best].point.y)

@@ -19,7 +19,7 @@ namespace MonsterMiner.World
 
         void Update()
         {
-            if (!TryGetLocalPosition(out var local) || IsBelowPlateau(local))
+            if (!TryGetLocalPosition(out var local) || IsOnPlains(bounds, local))
                 return;
 
             if (PlateauBoundary.IsNearPlateauEdge(local.x, local.z, bounds.Radius, WarningDistance))
@@ -28,7 +28,7 @@ namespace MonsterMiner.World
 
         void FixedUpdate()
         {
-            if (!TryGetLocalPosition(out var local) || IsBelowPlateau(local))
+            if (!TryGetLocalPosition(out var local) || IsOnPlains(bounds, local))
                 return;
 
             if (!ShouldStayOnPlateau(local, out var clamped))
@@ -97,9 +97,13 @@ namespace MonsterMiner.World
             return true;
         }
 
-        static bool IsBelowPlateau(Vector3 local)
+        static bool IsOnPlains(CavernBounds bounds, Vector3 local)
         {
-            return local.y < PlainsBiomeVisualFactory.PlainsSurfaceLocalY - WorldScale.Feet(20f);
+            if (bounds == null)
+                return false;
+
+            Vector3 world = bounds.transform.TransformPoint(local);
+            return PlainsGroundSupport.IsOnPlains(bounds, world);
         }
     }
 }

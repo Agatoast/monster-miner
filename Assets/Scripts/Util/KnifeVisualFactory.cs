@@ -6,6 +6,7 @@ namespace MonsterMiner.Util
     public static class KnifeVisualFactory
     {
         const string PrefabResourcePath = "Models/Tools/knife_polymer";
+        static readonly Color LegendaryGold = ItemSkinColorRules.LegendaryWeaponGold;
 
         static readonly Vector3 HeldLocalPosition = new Vector3(0.01f, -0.04f, 0f);
         static readonly Vector3 HeldLocalEuler = new Vector3(90f, 180f, -90f);
@@ -32,7 +33,7 @@ namespace MonsterMiner.Util
                 Quaternion.Euler(HeldLocalEuler),
                 HeldLocalScale,
                 knifeItem != null ? $"HeldKnife_{knifeItem.itemId}" : "HeldKnife",
-                knifeItem?.worldColor);
+                knifeItem);
         }
 
         public static GameObject CreateBoardKnife(Transform parent)
@@ -56,7 +57,7 @@ namespace MonsterMiner.Util
             return visual;
         }
 
-        static GameObject CreateVisual(Transform parent, Vector3 localPosition, Quaternion localRotation, Vector3 localScale, string objectName, Color? bladeTint)
+        static GameObject CreateVisual(Transform parent, Vector3 localPosition, Quaternion localRotation, Vector3 localScale, string objectName, ItemDefinition item)
         {
             var prefab = Resources.Load<GameObject>(PrefabResourcePath);
             if (prefab == null)
@@ -70,7 +71,12 @@ namespace MonsterMiner.Util
             knife.transform.localPosition = localPosition;
             knife.transform.localRotation = localRotation;
             knife.transform.localScale = localScale;
-            ApplyUrpMaterials(knife, bladeTint);
+
+            if (item != null && item.isLegendary)
+                ApplyLegendaryGoldMaterials(knife);
+            else
+                ApplyUrpMaterials(knife, item?.worldColor);
+
             DisableColliders(knife);
             return knife;
         }
@@ -78,6 +84,47 @@ namespace MonsterMiner.Util
         static GameObject CreateVisual(Transform parent, Vector3 localPosition, Quaternion localRotation, Vector3 localScale, string objectName)
         {
             return CreateVisual(parent, localPosition, localRotation, localScale, objectName, null);
+        }
+
+        public static void ApplyLegendaryGoldMaterials(GameObject root)
+        {
+            var template = Resources.Load<Material>("Materials/DefaultSurface");
+            var urpLit = Shader.Find("Universal Render Pipeline/Lit");
+            if (template == null && urpLit == null)
+                return;
+
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var sources = renderer.sharedMaterials;
+                var remapped = new Material[sources.Length];
+                for (int i = 0; i < sources.Length; i++)
+                {
+                    var material = template != null ? new Material(template) : new Material(urpLit);
+                    if (material.HasProperty("_BaseColor"))
+                        material.SetColor("_BaseColor", LegendaryGold);
+                    else if (material.HasProperty("_Color"))
+                        material.color = LegendaryGold;
+
+                    if (material.HasProperty("_BaseMap"))
+                        material.SetTexture("_BaseMap", null);
+                    if (material.HasProperty("_MainTex"))
+                        material.SetTexture("_MainTex", null);
+                    if (material.HasProperty("_Metallic"))
+                        material.SetFloat("_Metallic", 0.85f);
+                    if (material.HasProperty("_Smoothness"))
+                        material.SetFloat("_Smoothness", 0.65f);
+
+                    remapped[i] = material;
+                }
+
+                renderer.sharedMaterials = remapped;
+            }
+        }
+
+        public static void ApplyLegendaryGoldMaterialsIfNeeded(GameObject root, ItemDefinition item)
+        {
+            if (item != null && item.isLegendary)
+                ApplyLegendaryGoldMaterials(root);
         }
 
         public static void ApplyUrpMaterials(GameObject root)

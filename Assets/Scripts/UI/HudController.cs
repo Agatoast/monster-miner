@@ -53,6 +53,8 @@ namespace MonsterMiner.UI
         void Update()
         {
             DeathScreenDisplay.HandleInput();
+            MinerTurnInPopupDisplay.HandleInput();
+            WorldMapDisplay.HandleInput();
             HudEggHitDisplay.Tick(Time.deltaTime);
             CombatHitFeedbackDisplay.Tick(Time.deltaTime);
 
@@ -102,6 +104,8 @@ namespace MonsterMiner.UI
             if (!DeathScreenDisplay.IsActive
                 && (ctx.Shop == null || !ctx.Shop.IsMenuOpen)
                 && !SellConfirmationDisplay.IsActive
+                && !MinerTurnInPopupDisplay.IsActive
+                && !WorldMapDisplay.IsActive
                 && !ctx.IsPlayerDead)
             {
                 RangedCrosshairDisplay.Draw(ctx);
@@ -110,6 +114,14 @@ namespace MonsterMiner.UI
             if (DeathScreenDisplay.IsActive)
             {
                 DeathScreenDisplay.Draw();
+            }
+            else if (MinerTurnInPopupDisplay.IsActive)
+            {
+                MinerTurnInPopupDisplay.Draw();
+            }
+            else if (WorldMapDisplay.IsActive)
+            {
+                WorldMapDisplay.Draw();
             }
             else if (ctx.Shop != null && ctx.Shop.IsMenuOpen)
             {
@@ -121,24 +133,40 @@ namespace MonsterMiner.UI
             }
             else if (!ctx.IsPlayerDead)
             {
-                var interactor = ctx.Player != null ? ctx.Player.GetComponent<Player.Interactor>() : null;
-                if (interactor != null && interactor.HasCenterTarget)
+                var creatureCarrier = ctx.Player != null
+                    ? ctx.Player.GetComponent<Player.PlayerCreatureCarrier>()
+                    : null;
+                if (creatureCarrier != null && creatureCarrier.IsCarrying)
                 {
-                    var camera = ctx.Player.ViewCamera;
-                    string prompt = InteractPromptDisplay.FormatPrompt(interactor.CurrentTarget.GetPrompt());
-                    if (!string.IsNullOrEmpty(prompt))
+                    DrawInteractPrompt(
+                        interactPrompt,
+                        InteractPromptDisplay.FormatPrompt("Throw it! [E]"),
+                        ctx.Player.ViewCamera,
+                        null,
+                        ctx);
+                }
+                else
+                {
+                    var interactor = ctx.Player != null ? ctx.Player.GetComponent<Player.Interactor>() : null;
+                    if (interactor != null && interactor.HasCenterTarget)
                     {
-                        if (interactor.CurrentTarget is MinerQuestNpc miner)
+                        var camera = ctx.Player.ViewCamera;
+                        string prompt = InteractPromptDisplay.FormatPrompt(interactor.CurrentTarget.GetPrompt());
+                        if (!string.IsNullOrEmpty(prompt))
                         {
-                            MinerDialogueDisplay.Draw(miner, camera);
-                        }
-                        else
-                        {
-                            DrawInteractPrompt(
-                                interactPrompt,
-                                prompt,
-                                camera,
-                                interactor.CurrentTarget as IInteractPromptBounds);
+                            if (interactor.CurrentTarget is MinerQuestNpc miner)
+                            {
+                                MinerDialogueDisplay.Draw(miner, camera);
+                            }
+                            else
+                            {
+                                DrawInteractPrompt(
+                                    interactPrompt,
+                                    prompt,
+                                    camera,
+                                    interactor.CurrentTarget as IInteractPromptBounds,
+                                    ctx);
+                            }
                         }
                     }
                 }
@@ -163,7 +191,7 @@ namespace MonsterMiner.UI
             }
         }
 
-        static void DrawInteractPrompt(GUIStyle style, string prompt, Camera camera, IInteractPromptBounds boundsTarget)
+        static void DrawInteractPrompt(GUIStyle style, string prompt, Camera camera, IInteractPromptBounds boundsTarget, GameContext ctx)
         {
             const float maxPromptWidth = 720f;
             var promptContent = new GUIContent(prompt);
@@ -175,16 +203,24 @@ namespace MonsterMiner.UI
                 float promptHeight = style.CalcHeight(promptContent, promptWidth);
                 float promptX = boundsRect.center.x - promptWidth * 0.5f;
                 float promptY = boundsRect.center.y - promptHeight * 0.5f;
+
+                if (RangedCrosshairDisplay.TryGetAmmoTopY(ctx, out float ammoTopY)
+                    && promptY + promptHeight > ammoTopY - 8f)
+                {
+                    promptY = RangedCrosshairDisplay.GetPromptYAboveRangedHud(ctx, promptHeight);
+                }
+
                 GUI.Label(new Rect(promptX, promptY, promptWidth, promptHeight), prompt, style);
                 return;
             }
 
             float fallbackWidth = maxPromptWidth;
             float fallbackHeight = style.CalcHeight(promptContent, fallbackWidth);
+            float fallbackY = RangedCrosshairDisplay.GetPromptYAboveRangedHud(ctx, fallbackHeight);
             GUI.Label(
                 new Rect(
                     Screen.width * 0.5f - fallbackWidth * 0.5f,
-                    Screen.height * 0.5f + 34f,
+                    fallbackY,
                     fallbackWidth,
                     fallbackHeight),
                 prompt,

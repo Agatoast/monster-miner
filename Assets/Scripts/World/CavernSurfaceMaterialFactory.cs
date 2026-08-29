@@ -13,12 +13,12 @@ namespace MonsterMiner.World
         static Material floorMaterial;
         static Material grassMaterial;
         static Material dirtMaterial;
-        static Material lowerPlainsGrassMaterial;
-        static Material lowerPlainsMeadowMaterial;
-        static Material lowerPlainsScrubMaterial;
+        static Material plainsGrassMaterial;
+        static Material plainsMeadowMaterial;
+        static Material plainsScrubMaterial;
         static Material vistaCanopyMaterial;
         static Material unlitVistaCanopyMaterial;
-        static Material unlitLowerPlainsMaterial;
+        static Material unlitPlainsMaterial;
 
         public static Material GetShellMaterial()
         {
@@ -93,13 +93,13 @@ namespace MonsterMiner.World
             return dirtMaterial;
         }
 
-        public static Material GetLowerPlainsGrassMaterial()
+        public static Material GetPlainsGrassMaterial()
         {
-            if (lowerPlainsGrassMaterial != null)
-                return lowerPlainsGrassMaterial;
+            if (plainsGrassMaterial != null)
+                return plainsGrassMaterial;
 
             ColorUtility.TryParseHtmlString("#4a7a2c", out var color);
-            lowerPlainsGrassMaterial = CreateStoneMaterial(
+            plainsGrassMaterial = CreateStoneMaterial(
                 color,
                 smoothness: 0.015f,
                 seed: 144.2f,
@@ -107,17 +107,17 @@ namespace MonsterMiner.World
                 shadeMin: 0.42f,
                 shadeMax: 1.18f,
                 crackStrength: 0.12f);
-            lowerPlainsGrassMaterial.name = "LowerPlainsGrass";
-            return lowerPlainsGrassMaterial;
+            plainsGrassMaterial.name = "PlainsGrass";
+            return plainsGrassMaterial;
         }
 
-        public static Material GetLowerPlainsMeadowMaterial()
+        public static Material GetPlainsMeadowMaterial()
         {
-            if (lowerPlainsMeadowMaterial != null)
-                return lowerPlainsMeadowMaterial;
+            if (plainsMeadowMaterial != null)
+                return plainsMeadowMaterial;
 
             ColorUtility.TryParseHtmlString("#6f9a3a", out var color);
-            lowerPlainsMeadowMaterial = CreateStoneMaterial(
+            plainsMeadowMaterial = CreateStoneMaterial(
                 color,
                 smoothness: 0.02f,
                 seed: 201.6f,
@@ -125,17 +125,17 @@ namespace MonsterMiner.World
                 shadeMin: 0.48f,
                 shadeMax: 1.22f,
                 crackStrength: 0.06f);
-            lowerPlainsMeadowMaterial.name = "LowerPlainsMeadow";
-            return lowerPlainsMeadowMaterial;
+            plainsMeadowMaterial.name = "PlainsMeadow";
+            return plainsMeadowMaterial;
         }
 
-        public static Material GetLowerPlainsScrubMaterial()
+        public static Material GetPlainsScrubMaterial()
         {
-            if (lowerPlainsScrubMaterial != null)
-                return lowerPlainsScrubMaterial;
+            if (plainsScrubMaterial != null)
+                return plainsScrubMaterial;
 
             ColorUtility.TryParseHtmlString("#6a5a34", out var color);
-            lowerPlainsScrubMaterial = CreateStoneMaterial(
+            plainsScrubMaterial = CreateStoneMaterial(
                 color,
                 smoothness: 0.025f,
                 seed: 77.3f,
@@ -143,8 +143,8 @@ namespace MonsterMiner.World
                 shadeMin: 0.5f,
                 shadeMax: 1.08f,
                 crackStrength: 0.18f);
-            lowerPlainsScrubMaterial.name = "LowerPlainsScrub";
-            return lowerPlainsScrubMaterial;
+            plainsScrubMaterial.name = "PlainsScrub";
+            return plainsScrubMaterial;
         }
 
         public static Material GetVistaCanopyMaterial()
@@ -174,13 +174,13 @@ namespace MonsterMiner.World
             return unlitVistaCanopyMaterial;
         }
 
-        public static Material GetUnlitLowerPlainsMaterial()
+        public static Material GetUnlitPlainsMaterial()
         {
-            if (unlitLowerPlainsMaterial != null)
-                return unlitLowerPlainsMaterial;
+            if (unlitPlainsMaterial != null)
+                return unlitPlainsMaterial;
 
-            unlitLowerPlainsMaterial = CreateUnlitMaterial(new Color(0.34f, 0.58f, 0.18f), "UnlitLowerPlains");
-            return unlitLowerPlainsMaterial;
+            unlitPlainsMaterial = CreateUnlitMaterial(new Color(0.34f, 0.58f, 0.18f), "UnlitPlains");
+            return unlitPlainsMaterial;
         }
 
         static Material CreateUnlitMaterial(Color color, string materialName)

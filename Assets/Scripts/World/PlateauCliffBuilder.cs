@@ -12,9 +12,9 @@ namespace MonsterMiner.World
             var root = new GameObject("PlateauBluff").transform;
             root.SetParent(parent, false);
 
-            float lowerBaseY = LowerWorldBuilder.GetLowerGroundBaseY(plainsBaseLocalY);
-            LowerWorldBuilder.Build(root, plainsBaseLocalY, bounds.Radius);
-            PlateauWallBuilder.Build(root, bounds, plainsBaseLocalY, lowerBaseY);
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(plainsBaseLocalY);
+            PlainsWorldBuilder.Build(root, plainsBaseLocalY, bounds);
+            PlateauWallBuilder.Build(root, bounds, plainsBaseLocalY, plainsBaseY);
         }
     }
 }

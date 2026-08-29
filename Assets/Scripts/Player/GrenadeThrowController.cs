@@ -60,7 +60,10 @@ namespace MonsterMiner.Player
 
         void LateUpdate()
         {
-            if (PlayerController.IsGameplayBlocked() || GameContext.Instance?.Shop?.IsMenuOpen == true || SellConfirmationDisplay.IsActive)
+            if (PlayerController.IsGameplayBlocked()
+                || GameContext.Instance?.Shop?.IsMenuOpen == true
+                || SellConfirmationDisplay.IsActive
+                || WorldMapDisplay.IsActive)
             {
                 aimIndicator.SetVisible(false);
                 return;
@@ -107,7 +110,7 @@ namespace MonsterMiner.Player
                 ? controller.ViewCamera.transform.position + controller.ViewCamera.transform.forward * 0.35f
                 : transform.position + Vector3.up * 1.2f;
 
-            float damage = Mathf.Max(1f, slot.item.weaponDamage);
+            float damage = Mathf.Max(1f, InventorySystem.GetWeaponDamage(slot.item));
             if (!ctx.Inventory.TryRemoveFromSelected(1))
                 return;
 

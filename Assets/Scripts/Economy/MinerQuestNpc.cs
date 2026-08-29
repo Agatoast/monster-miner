@@ -1,5 +1,6 @@
 using MonsterMiner.Core;
 using MonsterMiner.Interaction;
+using MonsterMiner.UI;
 using UnityEngine;
 
 namespace MonsterMiner.Economy
@@ -7,27 +8,30 @@ namespace MonsterMiner.Economy
     public class MinerQuestNpc : MonoBehaviour, IInteractable, IInteractPromptBounds
     {
         const string QuestPrompt =
-            "I need your help! I have been mining here for years and I am so close to breaking into the motherlode.\n\n"
-            + "I think there is another cave on the other side of this wall but I need something to blast through.\n\n"
-            + "Bring me the Heart of the Pentachick.";
+            "Adventurer, the Shop Keeper told me you are looking for a Dragon Stone. I might be able to help, but first you have to help me.\n\n"
+            + "My wife is dying and the apothecary needs the Heart of a Pentachick to craft the medicine. I had a Pentachick Finder, but the bird was too much for me. I need you to bring me the heart to save my wife. The Shop Keeper sells Finders to help you see what is in the eggs so you can find the right one.";
 
         const string GiveFinderPrompt = "Give Miner the Heart of the Pentachick";
         const string WingsPermissionPrompt =
-            "Thank you, take the wings and feel free to use my motorcycle down below.";
+            "Thank you, take the wings and feel free to use my truck down below.";
+        const string TurnInPopupBody =
+            "Thank you for bringing me the Heart of the Pentachick. Now I can save my wife.\n\n"
+            + "It looks like the Dragon Stone you are looking for isn't here and you are going to need a way off of this rock. Take my wings. Once you have them on, jump over the edge and you will glide down. When you get down, feel free to use my truck to get around.\n\n"
+            + "Before you go, take this Map to help you find your way.";
         const string WingsSpentPrompt = "Those wings will not lift you again.";
 
         public string GetDialogueBody()
         {
             var ctx = GameContext.Instance;
             var progression = ctx?.CaveProgression;
+            if (HasPentachickHeart(ctx))
+                return GiveFinderPrompt;
+
             if (progression != null && progression.MinerWingsConsumed)
                 return WingsSpentPrompt;
 
             if (progression != null && progression.HasMinerWingsPermission)
                 return WingsPermissionPrompt;
-
-            if (HasPentachickHeart(ctx))
-                return GiveFinderPrompt;
 
             return QuestPrompt;
         }
@@ -35,21 +39,27 @@ namespace MonsterMiner.Economy
         public bool ShouldShowInteractPrompt()
         {
             var ctx = GameContext.Instance;
+            if (HasPentachickHeart(ctx))
+                return true;
+
             if (ctx?.CaveProgression != null
                 && (ctx.CaveProgression.HasMinerWingsPermission || ctx.CaveProgression.IsCave2Unlocked))
                 return true;
 
-            return HasPentachickHeart(ctx);
+            return false;
         }
 
         public bool ShouldHighlightPhoenixHeart()
         {
             var ctx = GameContext.Instance;
+            if (HasPentachickHeart(ctx))
+                return true;
+
             if (ctx?.CaveProgression != null
                 && (ctx.CaveProgression.HasMinerWingsPermission || ctx.CaveProgression.IsCave2Unlocked))
                 return false;
 
-            return !HasPentachickHeart(ctx);
+            return true;
         }
 
         public string GetPrompt()
@@ -73,27 +83,28 @@ namespace MonsterMiner.Economy
             if (ctx.CaveProgression.IsBlastInProgress)
                 return;
 
+            if (HasPentachickHeart(ctx))
+            {
+                var heart = ctx.Database?.pentachickHeartItem;
+                if (heart == null || !ctx.Inventory.TryRemove(heart, 1))
+                {
+                    ctx.Hud?.ShowMessage("You need the Heart of the Pentachick.");
+                    return;
+                }
+
+                ctx.CaveProgression.GrantMinerWingsPermission();
+                ctx.CaveProgression.GrantWorldMap();
+                MinerTurnInPopupDisplay.Show(TurnInPopupBody);
+                return;
+            }
+
             if (ctx.CaveProgression.HasMinerWingsPermission)
             {
                 ctx.Hud?.ShowMessage(
                     ctx.CaveProgression.MinerWingsConsumed
                         ? "Those wings will not lift you again."
                         : "Take the wings and glide down below.");
-                return;
             }
-
-            if (!HasPentachickHeart(ctx))
-                return;
-
-            var heart = ctx.Database?.pentachickHeartItem;
-            if (heart == null || !ctx.Inventory.TryRemove(heart, 1))
-            {
-                ctx.Hud?.ShowMessage("You need the Heart of the Pentachick.");
-                return;
-            }
-
-            ctx.CaveProgression.GrantMinerWingsPermission();
-            ctx.Hud?.ShowMessage(WingsPermissionPrompt);
         }
 
         public bool TryGetDialogueAnchorScreenPoint(Camera camera, out Vector2 guiPoint)

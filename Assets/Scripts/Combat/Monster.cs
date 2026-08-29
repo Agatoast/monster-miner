@@ -1,6 +1,8 @@
 using MonsterMiner.Core;
 using MonsterMiner.Data;
+using MonsterMiner.Interaction;
 using MonsterMiner.Inventory;
+using MonsterMiner.Player;
 using MonsterMiner.UI;
 using MonsterMiner.Util;
 using MonsterMiner.World;
@@ -8,7 +10,7 @@ using UnityEngine;
 
 namespace MonsterMiner.Combat
 {
-    public class Monster : MonoBehaviour
+    public class Monster : MonoBehaviour, IInteractable
     {
         const float GroundRestOffset = 0.02f;
 
@@ -19,8 +21,30 @@ namespace MonsterMiner.Combat
         float spawnHover;
         Transform player;
         Rigidbody rb;
+        Collider bodyCollider;
 
         bool forceFlee;
+        bool isCarried;
+        bool isInAir;
+
+        public bool IsCarried => isCarried;
+        public bool IsInAir => isInAir;
+        public bool IsNonAggressiveMonster => IsNonAggressive(definition);
+        public bool CanBePickedUp =>
+            definition != null
+            && currentHealth > 0f
+            && spawnHover <= 0f
+            && !isCarried
+            && !isInAir
+            && IsNonAggressive(definition);
+
+        public static bool IsNonAggressive(MonsterDefinition def)
+        {
+            if (def == null || def.isQuestBoss)
+                return false;
+
+            return def.fleesFromPlayer || def.attackDamage <= 0f;
+        }
 
         public void ForceFlee() => forceFlee = true;
 
@@ -84,6 +108,7 @@ namespace MonsterMiner.Combat
             definition = def;
             currentHealth = def.maxHealth;
             rb = GetComponent<Rigidbody>();
+            bodyCollider = GetComponent<Collider>();
             if (rb != null)
             {
                 rb.isKinematic = true;
@@ -146,6 +171,67 @@ namespace MonsterMiner.Combat
             return CreatureSurfaceSampler.SampleWorldY(bounds, localX, localZ);
         }
 
+        public string GetPrompt()
+        {
+            if (!CanBePickedUp)
+                return string.Empty;
+
+            return $"Pick up {definition.displayName} [E]";
+        }
+
+        public bool CanInteract(GameObject interactor)
+        {
+            if (!CanBePickedUp)
+                return false;
+
+            var eggCarrier = interactor.GetComponent<PlayerEggCarrier>();
+            if (eggCarrier != null && eggCarrier.IsCarryingEgg)
+                return false;
+
+            var creatureCarrier = interactor.GetComponent<PlayerCreatureCarrier>();
+            return creatureCarrier != null && !creatureCarrier.IsCarrying;
+        }
+
+        public void Interact(GameObject interactor)
+        {
+            if (!CanInteract(interactor))
+                return;
+
+            interactor.GetComponent<PlayerCreatureCarrier>()?.TryPickUp(this);
+        }
+
+        public void SetCarried(Transform anchor, Vector3 localPosition, Vector3 localEuler)
+        {
+            isCarried = true;
+            isInAir = false;
+            if (bodyCollider != null)
+                bodyCollider.enabled = false;
+
+            transform.SetParent(anchor, false);
+            transform.localPosition = localPosition;
+            transform.localRotation = Quaternion.Euler(localEuler);
+        }
+
+        public void BeginAirborneThrow()
+        {
+            isCarried = false;
+            isInAir = true;
+            transform.SetParent(null, true);
+            if (bodyCollider != null)
+                bodyCollider.enabled = true;
+        }
+
+        public void CompleteThrowLanding(Vector3 landPoint)
+        {
+            isInAir = false;
+            if (FloorAnchor.TryResolveFloorPoint(landPoint, 16f, 32f, out var floorPoint))
+                landPoint = floorPoint;
+
+            AlignToGround(landPoint, immediate: true);
+            EnforcePlateauShellIfNeeded(gameObject);
+            AlignToGround(transform.position, immediate: true);
+        }
+
         void FixedUpdate()
         {
             if (spawnHover > 0f)
@@ -153,6 +239,9 @@ namespace MonsterMiner.Combat
                 spawnHover = Mathf.Max(0f, spawnHover - WorldScale.Feet(8f) * Time.fixedDeltaTime);
                 AlignToGround(rb != null ? rb.position : transform.position, immediate: true);
             }
+
+            if (isCarried || isInAir)
+                return;
 
             if (player == null)
             {
@@ -285,7 +374,7 @@ namespace MonsterMiner.Combat
             currentHealth -= amount;
             BloodDecal.Spawn(hitPoint);
             CombatHitFeedbackDisplay.Show(hitPoint, amount);
-            if (rb != null)
+            if (rb != null && !isCarried && !isInAir)
                 TryMove(hitDirection.normalized * (definition.knockbackForce * 0.05f));
 
             if (currentHealth <= 0f)
@@ -294,6 +383,9 @@ namespace MonsterMiner.Combat
 
         void Die()
         {
+            if (isCarried)
+                GameContext.Instance?.Player?.GetComponent<PlayerCreatureCarrier>()?.ForceRelease();
+
             if (definition.explodesOnDeath)
             {
                 var hits = Physics.OverlapSphere(transform.position, definition.explosionRadius);

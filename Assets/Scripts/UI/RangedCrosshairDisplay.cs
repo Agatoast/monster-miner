@@ -10,6 +10,7 @@ namespace MonsterMiner.UI
     {
         public const float SizePixels = 80f;
         const string ReloadPrompt = "Push R to reload";
+        const float HudStackGap = 8f;
 
         const float CrossArmLength = 20f;
         const float CrossCenterGap = 5f;
@@ -27,7 +28,7 @@ namespace MonsterMiner.UI
             float centerY = Screen.height * 0.5f;
             DrawCrosshair(centerX, centerY);
 
-            float textY = centerY + SizePixels * 0.5f + 8f;
+            float textY = centerY + SizePixels * 0.5f + HudStackGap;
             textY = DrawAmmoCounter(ctx, centerX, textY);
 
             if (ShouldShowReloadPrompt(ctx))
@@ -85,6 +86,27 @@ namespace MonsterMiner.UI
             GUI.Label(new Rect(x, y, width, height), ReloadPrompt, style);
         }
 
+        public static bool TryGetAmmoTopY(GameContext ctx, out float ammoTopY)
+        {
+            ammoTopY = 0f;
+            if (!ShouldShow(ctx))
+                return false;
+
+            ammoTopY = Screen.height * 0.5f + SizePixels * 0.5f + HudStackGap;
+            return true;
+        }
+
+        public static float GetPromptYAboveRangedHud(GameContext ctx, float promptHeight)
+        {
+            if (!TryGetAmmoTopY(ctx, out float ammoTopY))
+                return Screen.height * 0.5f + 34f;
+
+            float promptY = ammoTopY - HudStackGap - promptHeight;
+            float crosshairTopY = Screen.height * 0.5f - SizePixels * 0.5f;
+            float aboveCrosshairY = crosshairTopY - HudStackGap - promptHeight;
+            return Mathf.Min(promptY, aboveCrosshairY);
+        }
+
         static bool ShouldShowReloadPrompt(GameContext ctx)
         {
             var slot = ctx.Inventory?.GetSelectedSlot();
@@ -102,7 +124,10 @@ namespace MonsterMiner.UI
             if (ctx.Shop != null && ctx.Shop.IsMenuOpen)
                 return false;
 
-            if (DeathScreenDisplay.IsActive || SellConfirmationDisplay.IsActive)
+            if (DeathScreenDisplay.IsActive
+                || SellConfirmationDisplay.IsActive
+                || MinerTurnInPopupDisplay.IsActive
+                || WorldMapDisplay.IsActive)
                 return false;
 
             if (GrenadeThrowController.IsGrenadeEquipped)

@@ -21,23 +21,22 @@ namespace MonsterMiner.Inventory
             if (item.itemId == "shiny_pebble")
             {
                 go = PebbleVisualFactory.CreateWorldPebble(position, item.displayName);
-                var rb = go.AddComponent<Rigidbody>();
-                rb.mass = 0.05f;
-                rb.useGravity = false;
-                rb.isKinematic = true;
+                AttachStaticRigidbody(go);
             }
             else if (InventorySystem.IsMonsterMeat(item))
             {
                 go = MeatVisualFactory.CreateWorldMeat(position, item);
-                var rb = go.AddComponent<Rigidbody>();
-                rb.mass = 0.05f;
-                rb.useGravity = false;
-                rb.isKinematic = true;
+                AttachStaticRigidbody(go);
             }
             else
             {
-                go = PrimitiveFactory.CreatePrimitive(PrimitiveType.Sphere, position, Vector3.one * 0.35f, item.worldColor, item.displayName);
-                PrimitiveFactory.EnsureRigidbody(go, 0.3f);
+                go = PrimitiveFactory.CreatePrimitive(
+                    PrimitiveType.Sphere,
+                    position,
+                    Vector3.one * 0.35f * MeatVisualFactory.DropVisualScaleMultiplier,
+                    item.worldColor,
+                    item.displayName);
+                AttachStaticRigidbody(go, 0.3f);
             }
             var pickup = go.AddComponent<WorldPickup>();
             pickup.Initialize(item, count, trackAsWorldPebble);
@@ -80,6 +79,17 @@ namespace MonsterMiner.Inventory
                 else
                     ctx.Hud?.ShowMessage("Need an empty inventory slot for the Pentachick Heart.");
             }
+        }
+
+        static void AttachStaticRigidbody(GameObject go, float mass = 0.05f)
+        {
+            var rb = go.GetComponent<Rigidbody>();
+            if (rb == null)
+                rb = go.AddComponent<Rigidbody>();
+
+            rb.mass = mass;
+            rb.useGravity = false;
+            rb.isKinematic = true;
         }
     }
 }

@@ -24,6 +24,8 @@ namespace MonsterMiner.Core
         public ShopManager Shop { get; set; }
         public CaveProgression CaveProgression { get; set; }
         public Shopkeeper Shopkeeper { get; set; }
+        public ItemSkinCollection ItemSkins { get; set; }
+        public DriveableTruck PlayerTruck { get; set; }
         public SlotMachine SlotMachine { get; set; }
         public HudController Hud { get; set; }
         public GameDatabase Database { get; set; }

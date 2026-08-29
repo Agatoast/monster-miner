@@ -4,6 +4,7 @@ using MonsterMiner.Data;
 using MonsterMiner.Inventory;
 using MonsterMiner.Util;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MonsterMiner.World
@@ -20,21 +21,22 @@ namespace MonsterMiner.World
         const float PebbleClearanceRadius = 0.4f;
         const int PebbleSpawnAttempts = 32;
         const int PlateauSpawnAttempts = 64;
+        const float LandEggClearance = 1.2f;
 
         CavernBounds bounds;
         GameDatabase database;
         Transform contentRoot;
-        readonly System.Collections.Generic.List<MonsterDefinition> weightedMonsters = new();
         int activeWorldPebbleCount;
         int pendingPebbleRespawns;
         float pebbleRespawnTimer = -1f;
+        bool huntGroundsSpawned;
 
         public void Initialize(CavernBounds cavernBounds, GameDatabase gameDatabase)
         {
             bounds = cavernBounds;
             database = gameDatabase;
             contentRoot = cavernBounds != null ? cavernBounds.transform : null;
-            RebuildMonsterTable();
+            gameObject.AddComponent<LandStreamingSpawner>().Initialize(cavernBounds, this);
         }
 
         void Start()
@@ -76,23 +78,6 @@ namespace MonsterMiner.World
                     continue;
 
                 FloorAnchor.PlaceOnFloor(pickup.gameObject, pickup.transform.position, bounds);
-            }
-        }
-
-        void RebuildMonsterTable()
-        {
-            weightedMonsters.Clear();
-            if (database == null)
-                return;
-
-            foreach (var monster in database.monsters)
-            {
-                if (monster.spawnWeight <= 0f)
-                    continue;
-
-                int copies = Mathf.Max(1, Mathf.RoundToInt(monster.spawnWeight * 100f));
-                for (int i = 0; i < copies; i++)
-                    weightedMonsters.Add(monster);
             }
         }
 
@@ -171,6 +156,35 @@ namespace MonsterMiner.World
             return true;
         }
 
+        public void SpawnHuntGroundEggs()
+        {
+            if (huntGroundsSpawned || bounds == null)
+                return;
+
+            huntGroundsSpawned = true;
+            var locations = HuntLocationCatalog.All;
+            for (int i = 0; i < locations.Length; i++)
+            {
+                Vector2 center = HuntLocationCatalog.GetLocalXZ(bounds, locations[i]);
+                SpawnEggsAround(center.x, center.y, HuntLocationCatalog.EggsPerLocation);
+            }
+        }
+
+        void SpawnEggsAround(float localX, float localZ, int count)
+        {
+            float ring = WorldScale.Feet(10f);
+            for (int i = 0; i < count; i++)
+            {
+                float angle = (i / (float)count) * Mathf.PI * 2f;
+                float x = localX + Mathf.Cos(angle) * ring;
+                float z = localZ + Mathf.Sin(angle) * ring;
+                if (!bounds.TryResolveFloorWorldPoint(x, z, out var spawnPoint))
+                    continue;
+
+                FinishEggSpawn(spawnPoint);
+            }
+        }
+
         public MonsterEgg SpawnEgg()
         {
             if (bounds == null)
@@ -212,6 +226,63 @@ namespace MonsterMiner.World
             }
         }
 
+        public bool TrySpawnLandEgg(Vector3 spawnPoint, Transform parent = null)
+        {
+            if (bounds == null || database == null)
+                return false;
+
+            if (!bounds.IsClearForSpawnAt(spawnPoint, LandEggClearance))
+                return false;
+
+            var egg = FinishLandEggSpawn(spawnPoint);
+            if (egg == null)
+                return false;
+
+            if (parent != null)
+                egg.transform.SetParent(parent, true);
+
+            return true;
+        }
+
+        MonsterEgg FinishLandEggSpawn(Vector3 spawnPoint)
+        {
+            if (!TryPickRandomLandCreature(out var creatureTypeId, out var definition))
+                return null;
+
+            var egg = MonsterEgg.Spawn(spawnPoint, definition);
+            if (egg == null)
+                return null;
+
+            egg.SetCreatureTypeId(creatureTypeId);
+            if (contentRoot != null)
+                egg.transform.SetParent(contentRoot, true);
+
+            return egg;
+        }
+
+        bool TryPickRandomLandCreature(out string creatureTypeId, out MonsterDefinition definition)
+        {
+            creatureTypeId = null;
+            definition = null;
+
+            if (database?.monsters == null || database.monsters.Count == 0)
+                return false;
+
+            var candidates = new List<MonsterDefinition>();
+            foreach (var monster in database.monsters)
+            {
+                if (monster != null && !monster.isQuestBoss)
+                    candidates.Add(monster);
+            }
+
+            if (candidates.Count == 0)
+                return false;
+
+            definition = candidates[Random.Range(0, candidates.Count)];
+            creatureTypeId = definition.monsterId;
+            return !string.IsNullOrEmpty(creatureTypeId);
+        }
+
         void SpawnPlateauEggs()
         {
             const float plateauEggClearance = 1.2f;
@@ -231,8 +302,15 @@ namespace MonsterMiner.World
 
         MonsterEgg FinishEggSpawn(Vector3 spawnPoint)
         {
-            var egg = MonsterEgg.Spawn(spawnPoint, PickRandomMonsterDefinition());
-            if (egg != null && contentRoot != null)
+            if (!TryPickMapCreature(spawnPoint, out var creatureTypeId, out var definition))
+                return null;
+
+            var egg = MonsterEgg.Spawn(spawnPoint, definition);
+            if (egg == null)
+                return null;
+
+            egg.SetCreatureTypeId(creatureTypeId);
+            if (contentRoot != null)
                 egg.transform.SetParent(contentRoot, true);
 
             return egg;
@@ -240,19 +318,66 @@ namespace MonsterMiner.World
 
         void AssignStoredEggCreatureTypes()
         {
-            var eggs = new System.Collections.Generic.List<MonsterEgg>(
-                FindObjectsByType<MonsterEgg>(FindObjectsSortMode.None));
+            var eggsByMap = new Dictionary<string, List<MonsterEgg>>();
+            foreach (var egg in FindObjectsByType<MonsterEgg>(FindObjectsSortMode.None))
+            {
+                if (egg == null)
+                    continue;
 
-            AssignCreatureType(eggs, "cave_rat", Random.Range(3, 6));
-            AssignCreatureType(eggs, "iguana", Random.Range(3, 6));
-            AssignCreatureType(eggs, "rabbit", Random.Range(3, 6));
-            AssignCreatureType(eggs, "cave_lizard", Random.Range(3, 6));
-            AssignCreatureType(eggs, "gremlin", Random.Range(3, 6));
-            AssignCreatureType(eggs, "salamander", Random.Range(1, 36));
-            AssignCreatureType(eggs, "pentachick", Random.Range(1, 3));
+                string mapId = MapSpawnCatalog.GetMapIdForWorldPoint(bounds, egg.transform.position);
+                if (!eggsByMap.TryGetValue(mapId, out var pool))
+                {
+                    pool = new List<MonsterEgg>();
+                    eggsByMap.Add(mapId, pool);
+                }
+
+                pool.Add(egg);
+            }
+
+            AssignMapEggDistribution(eggsByMap, MapSpawnCatalog.Cave1MapId, new[]
+            {
+                ("iguana", Random.Range(3, 6)),
+                ("rabbit", Random.Range(3, 6)),
+                ("cave_lizard", Random.Range(3, 6)),
+                ("gremlin", Random.Range(3, 6)),
+                ("salamander", Random.Range(1, 36))
+            });
+
+            foreach (var pair in eggsByMap)
+            {
+                for (int i = 0; i < pair.Value.Count; i++)
+                {
+                    var egg = pair.Value[i];
+                    if (egg == null || !string.IsNullOrEmpty(egg.CreatureTypeId))
+                        continue;
+
+                    if (!TryPickMapCreature(egg.transform.position, out var creatureTypeId, out _))
+                        continue;
+
+                    egg.SetCreatureTypeId(creatureTypeId);
+                }
+            }
         }
 
-        static void AssignCreatureType(System.Collections.Generic.List<MonsterEgg> pool, string typeId, int count)
+        void AssignMapEggDistribution(
+            Dictionary<string, List<MonsterEgg>> eggsByMap,
+            string mapId,
+            (string creatureTypeId, int count)[] distribution)
+        {
+            if (!eggsByMap.TryGetValue(mapId, out var pool) || pool.Count == 0)
+                return;
+
+            for (int i = 0; i < distribution.Length; i++)
+            {
+                var entry = distribution[i];
+                if (!MapSpawnCatalog.AllowsWorldSpawn(entry.creatureTypeId, mapId))
+                    continue;
+
+                AssignCreatureType(pool, entry.creatureTypeId, entry.count);
+            }
+        }
+
+        static void AssignCreatureType(List<MonsterEgg> pool, string typeId, int count)
         {
             for (int i = 0; i < count && pool.Count > 0; i++)
             {
@@ -270,7 +395,7 @@ namespace MonsterMiner.World
             if (!bounds.TryResolveFloorWorldPoint(0f, 0f, out var spawnPoint))
                 return null;
 
-            var definition = ResolveMonsterDefinition(creatureTypeId) ?? PickRandomMonsterDefinition();
+            var definition = ResolveMonsterDefinition(creatureTypeId);
             if (definition == null)
                 return null;
 
@@ -287,11 +412,32 @@ namespace MonsterMiner.World
 
         public Monster HatchMonster(Vector3 position, MonsterDefinition definition, string creatureTypeId = null)
         {
-            definition = ResolveMonsterDefinition(creatureTypeId) ?? definition ?? PickRandomMonsterDefinition();
+            definition = ResolveMonsterDefinition(creatureTypeId) ?? definition;
             if (definition == null)
                 return null;
 
+            string mapId = MapSpawnCatalog.GetMapIdForWorldPoint(bounds, position);
+            if (!definition.isQuestBoss && !MapSpawnCatalog.AllowsWorldSpawn(definition.monsterId, mapId))
+                return null;
+
             return Monster.Spawn(definition, position);
+        }
+
+        bool TryPickMapCreature(Vector3 worldPoint, out string creatureTypeId, out MonsterDefinition definition)
+        {
+            creatureTypeId = null;
+            definition = null;
+
+            if (bounds == null || database == null)
+                return false;
+
+            string mapId = MapSpawnCatalog.GetMapIdForWorldPoint(bounds, worldPoint);
+            creatureTypeId = MapSpawnCatalog.PickRandomCreatureForMap(mapId);
+            if (string.IsNullOrEmpty(creatureTypeId))
+                return false;
+
+            definition = ResolveMonsterDefinition(creatureTypeId);
+            return definition != null;
         }
 
         MonsterDefinition ResolveMonsterDefinition(string creatureTypeId)
@@ -300,16 +446,6 @@ namespace MonsterMiner.World
                 return null;
 
             return database.monsters.Find(m => m.monsterId == creatureTypeId);
-        }
-
-        MonsterDefinition PickRandomMonsterDefinition()
-        {
-            if (weightedMonsters.Count == 0)
-                RebuildMonsterTable();
-            if (weightedMonsters.Count == 0)
-                return null;
-
-            return weightedMonsters[Random.Range(0, weightedMonsters.Count)];
         }
     }
 }

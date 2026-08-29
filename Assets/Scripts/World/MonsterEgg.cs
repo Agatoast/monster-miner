@@ -185,6 +185,7 @@ namespace MonsterMiner.World
                 ctx?.Player?.GetComponent<PlayerEggCarrier>()?.ForceReleaseWithoutDrop();
 
             ctx?.Hud?.ClearHatchingMessage();
+            EggShellBurstEffect.Spawn(pos, gameObject);
             ctx?.SpawnManager?.HatchMonster(pos, hatchDefinition, creatureTypeId);
             Destroy(gameObject);
         }

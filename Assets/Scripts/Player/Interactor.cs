@@ -5,7 +5,7 @@ namespace MonsterMiner.Player
 {
     public class Interactor : MonoBehaviour
     {
-        [SerializeField] float interactRange = 4f;
+        [SerializeField] float interactRange = 8f;
         const QueryTriggerInteraction InteractTriggerQuery = QueryTriggerInteraction.Collide;
 
         Camera viewCamera;
@@ -51,26 +51,52 @@ namespace MonsterMiner.Player
                         continue;
 
                     float screenDistanceSq = (px - centerX) * (px - centerX) + (py - centerY) * (py - centerY);
-                    var interactables = hit.collider.GetComponentsInParent<IInteractable>();
-                    foreach (var interactable in interactables)
+                    var interactable = ResolveInteractable(hit, gameObject);
+                    if (interactable == null || !interactable.CanInteract(gameObject))
+                        continue;
+
+                    if (hit.distance < bestHitDistance ||
+                        (Mathf.Approximately(hit.distance, bestHitDistance) && screenDistanceSq < bestScreenDistanceSq))
                     {
-                        if (!interactable.CanInteract(gameObject))
-                            continue;
-
-                        if (hit.distance < bestHitDistance ||
-                            (Mathf.Approximately(hit.distance, bestHitDistance) && screenDistanceSq < bestScreenDistanceSq))
-                        {
-                            best = interactable;
-                            bestHitDistance = hit.distance;
-                            bestScreenDistanceSq = screenDistanceSq;
-                        }
-
-                        break;
+                        best = interactable;
+                        bestHitDistance = hit.distance;
+                        bestScreenDistanceSq = screenDistanceSq;
                     }
                 }
             }
 
             return best;
+        }
+
+        static IInteractable ResolveInteractable(RaycastHit hit, GameObject interactor)
+        {
+            var direct = hit.collider.GetComponent<IInteractable>();
+            if (direct != null)
+                return direct;
+
+            var parentInteractable = hit.collider.GetComponentInParent<IInteractable>();
+            if (parentInteractable != null)
+                return parentInteractable;
+
+            var truck = hit.collider.GetComponentInParent<DriveableTruck>();
+            if (truck == null)
+                return null;
+
+            var cab = truck.GetComponentInChildren<TruckCabInteract>(true);
+            var bed = truck.GetComponentInChildren<TruckBedInteract>(true);
+            Vector3 localHit = truck.transform.InverseTransformPoint(hit.point);
+            IInteractable preferred = localHit.z >= -0.2f ? cab : bed;
+
+            if (preferred != null && preferred.CanInteract(interactor))
+                return preferred;
+
+            if (cab != null && cab.CanInteract(interactor))
+                return cab;
+
+            if (bed != null && bed.CanInteract(interactor))
+                return bed;
+
+            return null;
         }
 
         public void TryInteract()
@@ -101,13 +127,8 @@ namespace MonsterMiner.Player
                     if (!Physics.Raycast(ray, out var hit, interactRange, Physics.DefaultRaycastLayers, InteractTriggerQuery))
                         continue;
 
-                    var interactables = hit.collider.GetComponentsInParent<IInteractable>();
-                    foreach (var interactable in interactables)
-                    {
-                        if (interactable == target)
-                            return true;
-                        break;
-                    }
+                    if (ResolveInteractable(hit, gameObject) == target)
+                        return true;
                 }
             }
 

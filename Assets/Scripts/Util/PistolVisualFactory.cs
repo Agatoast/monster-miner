@@ -1,3 +1,4 @@
+using MonsterMiner.Data;
 using UnityEngine;
 
 namespace MonsterMiner.Util
@@ -14,7 +15,7 @@ namespace MonsterMiner.Util
         public static Vector3 HeldMeshLocalPosition => HeldLocalPosition;
         public static Quaternion HeldMeshLocalRotation => HeldLocalRotation;
 
-        public static GameObject CreateHeldPistol(Transform parent)
+        public static GameObject CreateHeldPistol(Transform parent, ItemDefinition item = null)
         {
             var model = Resources.Load<GameObject>(ModelResourcePath);
             if (model == null)
@@ -30,6 +31,7 @@ namespace MonsterMiner.Util
             pistol.transform.localScale = ComputeHeldScale(pistol);
             pistol.transform.localPosition = HeldLocalPosition;
             ApplyUrpMaterials(pistol);
+            KnifeVisualFactory.ApplyLegendaryGoldMaterialsIfNeeded(pistol, item);
             DisableColliders(pistol);
             return pistol;
         }

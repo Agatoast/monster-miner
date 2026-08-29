@@ -7,6 +7,7 @@ namespace MonsterMiner.Combat
 
         public static bool TryGetConfig(string weaponId, out RangedWeaponConfig config)
         {
+            weaponId = Inventory.InventorySystem.ResolveBaseWeaponId(weaponId);
             config = weaponId switch
             {
                 "pistol" => new RangedWeaponConfig(25f, 9, false, 1),

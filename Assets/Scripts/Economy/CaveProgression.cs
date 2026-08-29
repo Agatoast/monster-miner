@@ -17,8 +17,14 @@ namespace MonsterMiner.Economy
         public bool IsBlastInProgress => blastInProgress;
         public bool HasMinerWingsPermission { get; private set; }
         public bool MinerWingsConsumed { get; private set; }
+        public bool HasWorldMap { get; private set; }
+        public bool HasLandedOnLand { get; private set; }
+        public bool HasLandQuarry2 { get; private set; }
+        public bool HasLandQuarry3 { get; private set; }
+        public bool HasLandQuarry4 { get; private set; }
+        public bool HasLandQuarry5 { get; private set; }
         public bool CanEquipMinerWings =>
-            HasMinerWingsPermission && !MinerWingsConsumed && !HasPentachickHeartInInventory();
+            HasMinerWingsPermission && !MinerWingsConsumed;
 
         public static bool HasPentachickHeartInInventory()
         {
@@ -30,6 +36,40 @@ namespace MonsterMiner.Economy
         public void GrantMinerWingsPermission() => HasMinerWingsPermission = true;
 
         public void ConsumeMinerWings() => MinerWingsConsumed = true;
+
+        public void CompleteMinerHeartTurnIn()
+        {
+            GrantMinerWingsPermission();
+            GrantWorldMap();
+        }
+
+        public void GrantWorldMap()
+        {
+            if (HasWorldMap)
+                return;
+
+            HasWorldMap = true;
+            GameContext.Instance?.SpawnManager?.SpawnHuntGroundEggs();
+        }
+
+        public void NotifyLandedOnLand()
+        {
+            if (HasLandedOnLand)
+                return;
+
+            HasLandedOnLand = true;
+            UnlockLandQuarry2();
+        }
+
+        public void UnlockLandQuarry2()
+        {
+            if (HasLandQuarry2)
+                return;
+
+            HasLandQuarry2 = true;
+            var builder = FindFirstObjectByType<CavernBuilder>();
+            builder?.BuildLandQuarry2(GameContext.Instance?.CavernBounds);
+        }
 
         public void BeginBlastSequence()
         {

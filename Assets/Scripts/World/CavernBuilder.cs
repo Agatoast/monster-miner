@@ -57,8 +57,17 @@ namespace MonsterMiner.World
             bounds.AddSpawnExclusion(
                 -3.3f,
                 3.6f,
-                shopAnchorZ + counterLocalZ - 1.5f,
+                shopAnchorZ + counterLocalZ - WorldScale.Feet(3f) - 1.5f,
                 shopAnchorZ + 1.2f);
+
+            float houseZ = shopAnchorZ + WorldScale.Feet(30f);
+            float houseHalfX = 1.7f + WorldScale.Feet(3f);
+            float houseHalfZ = 2.2f + WorldScale.Feet(3f);
+            bounds.AddSpawnExclusion(
+                -houseHalfX,
+                houseHalfX,
+                houseZ - houseHalfZ,
+                houseZ + houseHalfZ);
         }
 
         void BuildShopArea(CavernBounds bounds)
@@ -87,6 +96,13 @@ namespace MonsterMiner.World
                 Quaternion.Euler(0f, 180f, 0f),
                 bounds.SampleFloorWorldY(0f, shopAnchorZ));
 
+            float houseLocalZ = shopAnchorZ + WorldScale.Feet(30f);
+            HandpaintedHouseVisualFactory.CreateOnPlateau(
+                contentRoot,
+                new Vector3(0f, 0f, houseLocalZ),
+                Quaternion.Euler(0f, 180f, 0f),
+                bounds.SamplePlateauFloorWorldY(0f, houseLocalZ));
+
             var board = PrimitiveFactory.CreatePrimitive(
                 PrimitiveType.Cube,
                 shopRoot.transform.position,
@@ -94,24 +110,27 @@ namespace MonsterMiner.World
                 new Color(0.35f, 0.25f, 0.12f),
                 "ShopBoard",
                 shopRoot.transform);
-            board.transform.localPosition = new Vector3(-2.2f, 1.8f, counterLocalZ);
+            board.transform.localPosition = new Vector3(-2.2f, 1.8f, counterLocalZ - WorldScale.Feet(3f));
 
-            var slotCab = PrimitiveFactory.CreatePrimitive(
-                PrimitiveType.Cube,
-                shopRoot.transform.position,
-                new Vector3(1.2f, 2f, 1f),
-                new Color(0.8f, 0.15f, 0.15f),
-                "SlotMachineBody",
-                shopRoot.transform);
-            slotCab.transform.localPosition = new Vector3(2.5f, 1f, counterLocalZ);
+            var slotCab = SlotMachineVisualFactory.CreateShopSlotMachine(
+                shopRoot.transform,
+                new Vector3(2.5f, 0f, counterLocalZ),
+                Quaternion.Euler(0f, 180f, 0f),
+                bounds.SampleFloorWorldY(2.5f, shopAnchorZ + counterLocalZ));
 
             var ctx = GameContext.Instance;
             if (ctx != null)
             {
                 ctx.Shop = board.AddComponent<ShopManager>();
                 ctx.Shop.Initialize(board.transform);
-                ctx.SlotMachine = slotCab.AddComponent<SlotMachine>();
-                ctx.SlotMachine.Initialize(slotCab.transform);
+
+                if (slotCab != null)
+                {
+                    ctx.SlotMachine = slotCab.AddComponent<SlotMachine>();
+                    ctx.SlotMachine.Initialize(
+                        slotCab.transform,
+                        SlotMachineVisualFactory.GetVisual(slotCab));
+                }
             }
         }
 
@@ -144,12 +163,14 @@ namespace MonsterMiner.World
                 Quaternion.LookRotation(toShop),
                 bounds.SampleFloorWorldY(minerXZ.x, minerXZ.y));
 
-            AngelWingsVisualFactory.CreateOnGround(
-                contentRoot,
-                bounds.transform.TransformPoint(new Vector3(
+            Vector3 wingsPoint = bounds.TryResolveFloorWorldPoint(wingsXZ.x, wingsXZ.y, out var wingsFloor)
+                ? wingsFloor
+                : bounds.transform.TransformPoint(new Vector3(
                     wingsXZ.x,
                     bounds.SampleFloorLocalY(wingsXZ.x, wingsXZ.y),
-                    wingsXZ.y)));
+                    wingsXZ.y));
+
+            AngelWingsVisualFactory.CreateOnGround(contentRoot, wingsPoint);
 
             bounds.AddSpawnExclusion(minerXZ.x - 2f, minerXZ.x + 2f, minerXZ.y - 2f, minerXZ.y + 2f);
             bounds.AddSpawnExclusion(wingsXZ.x - 2f, wingsXZ.x + 2f, wingsXZ.y - 2f, wingsXZ.y + 2f);
@@ -190,6 +211,14 @@ namespace MonsterMiner.World
             }
 
             return best;
+        }
+
+        public void BuildLandQuarry2(CavernBounds bounds)
+        {
+            if (contentRoot == null || bounds == null)
+                return;
+
+            LandQuarry2Builder.Build(contentRoot, bounds);
         }
 
         public void OpenCave2Passage()

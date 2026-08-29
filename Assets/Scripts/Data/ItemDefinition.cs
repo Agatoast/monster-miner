@@ -20,6 +20,7 @@ namespace MonsterMiner.Data
         public bool isMiningGlove;
         public int miningBonus;
         public int weaponDamage;
+        public bool isLegendary;
         public bool canBeSold = true;
         public string iconResourcePath;
         public bool isEggFinder;
@@ -27,5 +28,7 @@ namespace MonsterMiner.Data
         public EggFinderRarity finderRarity;
         public int finderLocateMin = 1;
         public int finderLocateMax = 1;
+        public bool isSlotTestToken;
+        public bool isBossDrop;
     }
 }

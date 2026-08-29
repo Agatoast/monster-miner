@@ -17,9 +17,6 @@ namespace MonsterMiner.World
             if (progression.MinerWingsConsumed)
                 return "The wings are spent.";
 
-            if (CaveProgression.HasPentachickHeartInInventory())
-                return "Cannot equip wings while carrying the Pentachick Heart.";
-
             return "Equip the miner's wings [E]";
         }
 

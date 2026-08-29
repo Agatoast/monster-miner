@@ -49,7 +49,9 @@ namespace MonsterMiner.Core
             var builder = cavernGo.AddComponent<CavernBuilder>();
             ctx.CavernBounds = builder.Build(Vector3.zero);
             Physics.SyncTransforms();
-            ctx.PlayerSpawnPoint = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
+            SetupLandStart(ctx);
+            if (ctx.PlayerSpawnPoint == Vector3.zero)
+                ctx.PlayerSpawnPoint = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
 
             var spawnGo = new GameObject("SpawnManager");
             ctx.SpawnManager = spawnGo.AddComponent<SpawnManager>();
@@ -63,6 +65,10 @@ namespace MonsterMiner.Core
             ctx.Inventory.Initialize(3);
             ctx.Inventory.SetReservedPickaxe(ctx.Database.pickaxeItem);
             ctx.Inventory.EquipGloves(ctx.Database.glovesGray);
+
+            var itemSkinsGo = new GameObject("ItemSkinCollection");
+            ctx.ItemSkins = itemSkinsGo.AddComponent<ItemSkinCollection>();
+            ctx.ItemSkins.Initialize(ctx.Database);
 
             var playerGo = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             playerGo.name = "Player";
@@ -102,15 +108,22 @@ namespace MonsterMiner.Core
             var eggCarrier = playerGo.AddComponent<PlayerEggCarrier>();
             eggCarrier.Initialize(hands, hands.LeftHandAnchor);
 
+            var creatureCarrier = playerGo.AddComponent<PlayerCreatureCarrier>();
+            creatureCarrier.Initialize(hands.LeftHandAnchor);
+
             var finderLocator = playerGo.AddComponent<EggFinderLocator>();
             finderLocator.Initialize();
 
+            var vehicleMount = playerGo.AddComponent<PlayerVehicleMount>();
+            vehicleMount.Initialize();
+
             var input = playerGo.AddComponent<PlayerInput>();
-            input.Initialize(interactor, eggCarrier);
+            input.Initialize(interactor, eggCarrier, creatureCarrier);
 
             playerGo.AddComponent<PlayerCameraShake>();
             playerGo.AddComponent<GrenadeThrowController>();
             playerGo.AddComponent<PlateauEdgeGuard>();
+            playerGo.AddComponent<PlainsGroundSupport>();
             var wingsFlight = playerGo.AddComponent<PlayerWingsFlight>();
             wingsFlight.Initialize();
 
@@ -124,12 +137,96 @@ namespace MonsterMiner.Core
             yield return new WaitForFixedUpdate();
             Physics.SyncTransforms();
 
-            var spawn = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
+            var spawn = ctx.PlayerSpawnPoint;
+            if (spawn == Vector3.zero)
+                spawn = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
             ctx.PlayerSpawnPoint = spawn;
             if (ctx.Player != null)
+            {
                 ctx.Player.Respawn(spawn);
+                if (ctx.PlayerTruck != null)
+                {
+                    Vector3 toTruck = ctx.PlayerTruck.transform.position - ctx.Player.transform.position;
+                    toTruck.y = 0f;
+                    if (toTruck.sqrMagnitude > 0.01f)
+                        ctx.Player.transform.rotation = Quaternion.LookRotation(toTruck.normalized, Vector3.up);
+                }
+            }
             else
                 playerGo.transform.position = spawn;
+
+            ctx.CaveProgression?.CompleteMinerHeartTurnIn();
+            DevTestLoadout.Apply(ctx);
+
+            yield return null;
+            EnsureTruckRenderersEnabled(ctx.PlayerTruck);
+        }
+
+        static void EnsureTruckRenderersEnabled(DriveableTruck truck)
+        {
+            if (truck == null)
+                return;
+
+            foreach (var renderer in truck.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer != null)
+                    renderer.enabled = true;
+            }
+        }
+
+        static void SetupLandStart(GameContext ctx)
+        {
+            if (ctx?.CavernBounds == null)
+                return;
+
+            if (!TryResolveLandTruckStart(ctx.CavernBounds, out var truckPoint, out var truckRotation, out var playerSpawn))
+                return;
+
+            ctx.CaveProgression?.GrantWorldMap();
+            ctx.CaveProgression?.NotifyLandedOnLand();
+
+            var truck = IndustrialSmallTruckVisualFactory.CreateOnGround(
+                ctx.CavernBounds.transform,
+                truckPoint,
+                truckRotation);
+            if (truck != null)
+                ctx.PlayerTruck = truck;
+
+            ctx.PlayerSpawnPoint = playerSpawn;
+        }
+
+        static bool TryResolveLandTruckStart(
+            CavernBounds bounds,
+            out Vector3 truckFloorContact,
+            out Quaternion truckRotation,
+            out Vector3 playerSpawn)
+        {
+            truckFloorContact = Vector3.zero;
+            truckRotation = Quaternion.identity;
+            playerSpawn = Vector3.zero;
+
+            const float southAngle = -Mathf.PI * 0.5f;
+            float wall = PlateauWallGeometry.GetWallBaseOutwardRadius(southAngle, bounds.Radius);
+            float distance = wall + WorldScale.Feet(140f);
+            float localX = Mathf.Cos(southAngle) * distance;
+            float localZ = Mathf.Sin(southAngle) * distance;
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(localX, localZ, plainsBaseY);
+
+            truckFloorContact = bounds.transform.TransformPoint(new Vector3(localX, groundY, localZ));
+            Vector3 toPlateau = bounds.transform.position - truckFloorContact;
+            toPlateau.y = 0f;
+            if (toPlateau.sqrMagnitude < 0.01f)
+                toPlateau = bounds.transform.forward;
+            truckRotation = Quaternion.LookRotation(toPlateau.normalized, Vector3.up);
+
+            Vector3 driverSide = truckRotation * Vector3.left;
+            playerSpawn = truckFloorContact + driverSide * WorldScale.Feet(5f);
+            playerSpawn = PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                playerSpawn,
+                WorldScale.CharacterHeightUnits * 0.5f);
+            return true;
         }
 
         static Vector3 ResolvePlayerSpawnPoint(CavernBounds bounds, Vector3 localXZ)
