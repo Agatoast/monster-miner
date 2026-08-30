@@ -129,6 +129,8 @@ namespace MonsterMiner.World
             rockRoot.SetParent(chunkRoot, false);
             var eggRoot = new GameObject("Eggs").transform;
             eggRoot.SetParent(chunkRoot, false);
+            var creatureRoot = new GameObject("Creatures").transform;
+            creatureRoot.SetParent(chunkRoot, false);
 
             float outer = WorldRegion.GetLandOuterRadius(bounds.Radius);
             float SampleGround(float x, float z) => PlainsWorldBuilder.SamplePlainsLocalY(x, z, plainsBaseY);
@@ -165,7 +167,34 @@ namespace MonsterMiner.World
                 spawnManager?.TrySpawnLandEgg(spawnPoint, eggRoot);
             });
 
+            LandChunkPlacement.ForEachCreatureInChunk(chunkX, chunkZ, bounds, (localX, localZ) =>
+            {
+                if (!bounds.TryResolveFloorWorldPoint(localX, localZ, out var spawnPoint))
+                    return;
+
+                spawnManager?.TrySpawnLandCreature(spawnPoint, creatureRoot);
+            });
+
+            AddChunkGroundCollider(chunkRoot, chunkX, chunkZ);
+
             activeChunks.Add(key, chunkRoot);
+        }
+
+        void AddChunkGroundCollider(Transform chunkRoot, int chunkX, int chunkZ)
+        {
+            float minX = chunkX * chunkSize;
+            float minZ = chunkZ * chunkSize;
+            float centerX = minX + chunkSize * 0.5f;
+            float centerZ = minZ + chunkSize * 0.5f;
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(centerX, centerZ, plainsBaseY);
+            float thickness = WorldScale.PlateauGroundThickness * 6f;
+
+            var groundGo = new GameObject($"PlainsGroundCollider_{chunkX}_{chunkZ}");
+            groundGo.transform.SetParent(chunkRoot, false);
+            groundGo.transform.localPosition = new Vector3(centerX, groundY - thickness * 0.5f, centerZ);
+
+            var box = groundGo.AddComponent<BoxCollider>();
+            box.size = new Vector3(chunkSize, thickness, chunkSize);
         }
 
         void DestroyChunk(long key)

@@ -161,6 +161,19 @@ namespace MonsterMiner.Player
                 Vector3 nextPos = transform.position + glideDirection * forward - Vector3.up * drop;
 
                 Vector3 local = bounds.transform.InverseTransformPoint(nextPos);
+                if (LakeCatalog.IsOpenWaterLocal(local.x, local.z))
+                {
+                    Vector2 shore = LakeCatalog.GetNearestShoreLocal(local.x, local.z);
+                    Vector3 shoreWorld = bounds.transform.TransformPoint(new Vector3(shore.x, local.y, shore.y));
+                    Vector3 awayFromWater = shoreWorld - nextPos;
+                    awayFromWater.y = 0f;
+                    if (awayFromWater.sqrMagnitude > 0.01f)
+                    {
+                        glideDirection = awayFromWater.normalized;
+                        nextPos = shoreWorld + Vector3.up * (GetHalfHeight() + WorldScale.Feet(LandingClearanceFeet));
+                    }
+                }
+
                 bool stillOnPlateau = PlateauBoundary.IsOnPlateau(local.x, local.z, bounds.Radius);
                 float groundY = SampleFlightGroundWorldY(bounds, local.x, local.z, stillOnPlateau);
                 float feetY = nextPos.y - GetHalfHeight();

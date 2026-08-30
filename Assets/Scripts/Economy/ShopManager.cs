@@ -15,25 +15,48 @@ namespace MonsterMiner.Economy
 
         readonly Dictionary<string, int> purchaseCounts = new();
         readonly List<ShopMenuEntry> menuEntries = new();
+        readonly List<ShopBuyStation> buyStations = new();
 
         ShopBuyStation buyStation;
+        ShopBuyStation activeBuyStation;
         string currentMapId = MapIdFirstCave;
 
         public bool IsMenuOpen { get; private set; }
 
         public void Initialize(Transform boardTransform)
         {
-            buyStation = boardTransform.GetComponent<ShopBuyStation>();
+            RegisterBuyStation(boardTransform);
+        }
+
+        public void RegisterBuyStation(Transform boardTransform)
+        {
+            if (boardTransform == null)
+                return;
+
+            var station = boardTransform.GetComponent<ShopBuyStation>();
+            if (station == null)
+                station = boardTransform.gameObject.AddComponent<ShopBuyStation>();
+            station.Initialize(this);
+
+            if (!buyStations.Contains(station))
+                buyStations.Add(station);
+
             if (buyStation == null)
-                buyStation = boardTransform.gameObject.AddComponent<ShopBuyStation>();
-            buyStation.Initialize(this);
+                buyStation = station;
+
+            var camera = GameContext.Instance?.Player?.ViewCamera;
+            if (camera != null)
+                station.ConfigureHitbox(camera);
         }
 
         void Start()
         {
             var camera = GameContext.Instance?.Player?.ViewCamera;
-            if (camera != null)
-                buyStation?.ConfigureHitbox(camera);
+            if (camera == null)
+                return;
+
+            for (int i = 0; i < buyStations.Count; i++)
+                buyStations[i]?.ConfigureHitbox(camera);
         }
 
         void Update()
@@ -47,19 +70,39 @@ namespace MonsterMiner.Economy
                 return;
             }
 
-            if (!IsMenuOpen || buyStation == null)
+            if (!IsMenuOpen || buyStations.Count == 0)
                 return;
 
             var player = GameContext.Instance?.Player;
             var interactor = player != null ? player.GetComponent<Interactor>() : null;
-            if (interactor == null || !interactor.IsInInteractionRange(buyStation))
+            if (interactor == null)
+                return;
+
+            bool inRange = false;
+            for (int i = 0; i < buyStations.Count; i++)
+            {
+                var station = buyStations[i];
+                if (station != null && interactor.IsInInteractionRange(station))
+                {
+                    inRange = true;
+                    break;
+                }
+            }
+
+            if (!inRange)
                 CloseMenu();
+        }
+
+        public void OpenMenu(ShopBuyStation station)
+        {
+            activeBuyStation = station;
+            IsMenuOpen = true;
+            RebuildMenuEntries();
         }
 
         public void OpenMenu()
         {
-            IsMenuOpen = true;
-            RebuildMenuEntries();
+            OpenMenu(buyStation);
         }
 
         public void CloseMenu()
@@ -120,7 +163,8 @@ namespace MonsterMiner.Economy
             AddFixedPriceShopEntry(ctx, ctx.Database.rabbitFinderListing);
             AddFixedPriceShopEntry(ctx, ctx.Database.caveLizardFinderListing);
             AddFixedPriceShopEntry(ctx, ctx.Database.salamanderLureListing);
-            AddFixedPriceShopEntry(ctx, ctx.Database.phoenixLureListing);
+            if (activeBuyStation == null || !activeBuyStation.IsJarlLandShop)
+                AddFixedPriceShopEntry(ctx, ctx.Database.phoenixLureListing);
             AddWeaponShopEntry(ctx, ctx.Database.spearListing);
             AddWeaponShopEntry(ctx, ctx.Database.pistolListing);
             AddWeaponShopEntry(ctx, ctx.Database.rifleListing);
@@ -335,7 +379,7 @@ namespace MonsterMiner.Economy
                 return false;
             }
 
-            ApplyUpgrade(ctx, upgrade);
+            ApplyUpgrade(ctx, upgrade, cost);
             purchaseCounts[upgrade.upgradeId] = count + 1;
             ctx.Shopkeeper?.ThankCustomer();
             ctx.Hud?.ShowMessage($"Purchased {GetPurchaseLabel(upgrade)}");
@@ -559,7 +603,7 @@ namespace MonsterMiner.Economy
             return purchaseCounts.TryGetValue(upgradeId, out int count) ? count : 0;
         }
 
-        static void ApplyUpgrade(GameContext ctx, ShopUpgradeDefinition upgrade)
+        static void ApplyUpgrade(GameContext ctx, ShopUpgradeDefinition upgrade, int purchasePrice)
         {
             switch (upgrade.upgradeType)
             {
@@ -575,7 +619,7 @@ namespace MonsterMiner.Economy
                     break;
                 case UpgradeType.WeaponUnlock:
                     if (upgrade.unlockItem != null)
-                        ctx.Inventory.TryAdd(upgrade.unlockItem, 1, fromShopPurchase: true);
+                        ctx.Inventory.TryAdd(upgrade.unlockItem, 1, fromShopPurchase: true, shopPurchasePrice: purchasePrice);
                     break;
                 case UpgradeType.GloveUpgrade:
                     if (upgrade.unlockItem != null)

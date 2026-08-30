@@ -124,6 +124,7 @@ namespace MonsterMiner.Core
             playerGo.AddComponent<GrenadeThrowController>();
             playerGo.AddComponent<PlateauEdgeGuard>();
             playerGo.AddComponent<PlainsGroundSupport>();
+            playerGo.AddComponent<LakeTraversalGuard>();
             var wingsFlight = playerGo.AddComponent<PlayerWingsFlight>();
             wingsFlight.Initialize();
 
@@ -144,7 +145,15 @@ namespace MonsterMiner.Core
             if (ctx.Player != null)
             {
                 ctx.Player.Respawn(spawn);
-                if (ctx.PlayerTruck != null)
+                if (ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2 && ctx.CavernBounds != null)
+                {
+                    Vector3 centerWorld = QuarryCatalog.ResolveCenterWorld(ctx.CavernBounds);
+                    Vector3 toCenter = centerWorld - ctx.Player.transform.position;
+                    toCenter.y = 0f;
+                    if (toCenter.sqrMagnitude > 0.01f)
+                        ctx.Player.transform.rotation = Quaternion.LookRotation(toCenter.normalized, Vector3.up);
+                }
+                else if (ctx.PlayerTruck != null)
                 {
                     Vector3 toTruck = ctx.PlayerTruck.transform.position - ctx.Player.transform.position;
                     toTruck.y = 0f;
@@ -179,7 +188,7 @@ namespace MonsterMiner.Core
             if (ctx?.CavernBounds == null)
                 return;
 
-            if (!TryResolveLandTruckStart(ctx.CavernBounds, out var truckPoint, out var truckRotation, out var playerSpawn))
+            if (!TryResolveLandTruckStart(ctx.CavernBounds, out var truckPoint, out var truckRotation, out _))
                 return;
 
             ctx.CaveProgression?.GrantWorldMap();
@@ -192,7 +201,7 @@ namespace MonsterMiner.Core
             if (truck != null)
                 ctx.PlayerTruck = truck;
 
-            ctx.PlayerSpawnPoint = playerSpawn;
+            ctx.PlayerSpawnPoint = QuarryCatalog.ResolveHallFrontSpawnWorld(ctx.CavernBounds);
         }
 
         static bool TryResolveLandTruckStart(

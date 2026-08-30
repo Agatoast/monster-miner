@@ -12,6 +12,8 @@ namespace MonsterMiner.Economy
         Collider boardCollider;
         bool configuredVisualOffset;
 
+        public bool IsJarlLandShop { get; set; }
+
         public void Initialize(ShopManager manager)
         {
             shop = manager;
@@ -47,7 +49,7 @@ namespace MonsterMiner.Economy
 
         public void Interact(GameObject interactor)
         {
-            shop?.OpenMenu();
+            shop?.OpenMenu(this);
         }
     }
 }

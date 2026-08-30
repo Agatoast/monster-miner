@@ -12,6 +12,7 @@ namespace MonsterMiner.UI
         float messageTimer;
         string centerMessage = string.Empty;
         float centerMessageTimer;
+        float centerMessageScreenY = 0.5f;
         string hatchingMessage = string.Empty;
 
         public void Build() { RefreshSubscriptions(); }
@@ -44,9 +45,10 @@ namespace MonsterMiner.UI
             messageTimer = 3f;
         }
 
-        public void ShowCenterMessage(string text)
+        public void ShowCenterMessage(string text, float screenHeightFraction = 0.5f)
         {
             centerMessage = text;
+            centerMessageScreenY = screenHeightFraction;
             centerMessageTimer = Mathf.Max(centerMessageTimer, 2f);
         }
 
@@ -97,6 +99,7 @@ namespace MonsterMiner.UI
             HeartHealthDisplay.Draw(ctx.PlayerHealth.CurrentHealth, ctx.PlayerHealth.MaxHealth);
             if (ctx.PlayerThirst != null)
                 ThirstDisplay.Draw(ctx.PlayerThirst.CurrentThirst, ctx.PlayerThirst.MaxThirst);
+            CompassDisplay.Draw(ctx);
             HudHatchingDisplay.Draw(hatchingMessage);
             HudEggHitDisplay.Draw();
             CombatHitFeedbackDisplay.Draw(ctx.Player?.ViewCamera);
@@ -158,6 +161,10 @@ namespace MonsterMiner.UI
                             {
                                 MinerDialogueDisplay.Draw(miner, camera);
                             }
+                            else if (interactor.CurrentTarget is JarlQuestNpc jarl)
+                            {
+                                JarlDialogueDisplay.Draw(jarl, camera);
+                            }
                             else
                             {
                                 DrawInteractPrompt(
@@ -172,6 +179,8 @@ namespace MonsterMiner.UI
                 }
             }
 
+            TruckDashboardDisplay.Draw(ctx);
+
             if (!string.IsNullOrEmpty(message))
                 GUI.Label(new Rect(Screen.width * 0.5f - 300f, Screen.height - 120f, 600f, 40f), message, bigCenter);
 
@@ -185,7 +194,7 @@ namespace MonsterMiner.UI
                     normal = { textColor = new Color(1f, 0.92f, 0.55f) }
                 };
                 GUI.Label(
-                    new Rect(Screen.width * 0.5f - 320f, Screen.height * 0.5f - 24f, 640f, 48f),
+                    new Rect(Screen.width * 0.5f - 320f, Screen.height * centerMessageScreenY - 24f, 640f, 48f),
                     centerMessage,
                     warningStyle);
             }

@@ -20,7 +20,11 @@ namespace MonsterMiner.Util
                     || name == "PlainsColliderGrid" || name == "PlateauCliffWalls")
                     return true;
                 if (name.StartsWith("FloorCollider_") || name.StartsWith("PlainsGroundCollider_")
-                    || name.StartsWith("PlainsGroundCell_"))
+                    || name.StartsWith("PlainsGroundCell_") || name.StartsWith("Quarry2FloorCollider_"))
+                    return true;
+                if (name == "Quarry2FloorCollision" || name == "Quarry2FloorCenterCap")
+                    return true;
+                if (name == "LakeBeachCollision" || name.StartsWith("LakeBeachCollider_"))
                     return true;
                 transform = transform.parent;
             }

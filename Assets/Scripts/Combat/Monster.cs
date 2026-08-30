@@ -13,6 +13,13 @@ namespace MonsterMiner.Combat
     public class Monster : MonoBehaviour, IInteractable
     {
         const float GroundRestOffset = 0.02f;
+        const float PlayerNoticeDistanceFeet = 100f;
+        const float WanderSpeedMultiplier = 0.55f;
+        const float WanderMinSeconds = 1.4f;
+        const float WanderMaxSeconds = 3.8f;
+        const float WanderPauseChance = 0.18f;
+        const float WanderPauseMinSeconds = 0.6f;
+        const float WanderPauseMaxSeconds = 1.8f;
 
         MonsterDefinition definition;
         float currentHealth;
@@ -26,6 +33,8 @@ namespace MonsterMiner.Combat
         bool forceFlee;
         bool isCarried;
         bool isInAir;
+        Vector3 wanderDirection;
+        float wanderDirectionTimer;
 
         public bool IsCarried => isCarried;
         public bool IsInAir => isInAir;
@@ -47,6 +56,14 @@ namespace MonsterMiner.Combat
         }
 
         public void ForceFlee() => forceFlee = true;
+
+        public void LaunchFromTruck(Vector3 truckVelocity)
+        {
+            if (isCarried || isInAir || currentHealth <= 0f)
+                return;
+
+            TruckLaunchPhysics.LaunchCreature(this, truckVelocity);
+        }
 
         public static Monster Spawn(MonsterDefinition def, Vector3 position)
         {
@@ -109,6 +126,8 @@ namespace MonsterMiner.Combat
             currentHealth = def.maxHealth;
             rb = GetComponent<Rigidbody>();
             bodyCollider = GetComponent<Collider>();
+            if (bodyCollider != null)
+                DriveableTruck.RegisterPassThroughObstacle(bodyCollider);
             if (rb != null)
             {
                 rb.isKinematic = true;
@@ -221,6 +240,24 @@ namespace MonsterMiner.Combat
                 bodyCollider.enabled = true;
         }
 
+        public void CompleteTruckLaunchRecovery(Vector3 landPoint, bool _)
+        {
+            isInAir = false;
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                rb.useGravity = false;
+                rb.isKinematic = true;
+                rb.constraints = RigidbodyConstraints.FreezeRotation;
+            }
+
+            transform.rotation = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+            AlignToGround(landPoint, immediate: true);
+            EnforcePlateauShellIfNeeded(gameObject);
+            AlignToGround(transform.position, immediate: true);
+        }
+
         public void CompleteThrowLanding(Vector3 landPoint)
         {
             isInAir = false;
@@ -248,6 +285,9 @@ namespace MonsterMiner.Combat
                 var ctx = GameContext.Instance;
                 if (ctx?.Player != null)
                     player = ctx.Player.transform;
+                else
+                    Wander();
+
                 return;
             }
 
@@ -263,6 +303,17 @@ namespace MonsterMiner.Combat
 
             var toPlayer = player.position - transform.position;
             toPlayer.y = 0f;
+
+            float noticeDistance = WorldScale.Feet(PlayerNoticeDistanceFeet);
+            float noticeDistanceSqr = noticeDistance * noticeDistance;
+            bool playerNear = toPlayer.sqrMagnitude <= noticeDistanceSqr;
+
+            if (!playerNear)
+            {
+                Wander();
+                return;
+            }
+
             if (toPlayer.sqrMagnitude <= 0.01f)
                 return;
 
@@ -306,6 +357,36 @@ namespace MonsterMiner.Combat
             float speedMph = forceFlee ? definition.moveSpeedMph * 1.35f : definition.moveSpeedMph;
             TryMove(fleeDir * GetMoveUnitsPerSecond(speedMph) * Time.fixedDeltaTime);
             transform.rotation = Quaternion.LookRotation(fleeDir);
+        }
+
+        void Wander()
+        {
+            if (definition == null || definition.isQuestBoss)
+                return;
+
+            wanderDirectionTimer -= Time.fixedDeltaTime;
+            if (wanderDirectionTimer <= 0f)
+                PickNewWanderDirection();
+
+            if (wanderDirection.sqrMagnitude <= 0.001f)
+                return;
+
+            TryMove(wanderDirection * GetMoveUnitsPerSecond(definition.moveSpeedMph * WanderSpeedMultiplier) * Time.fixedDeltaTime);
+            transform.rotation = Quaternion.LookRotation(wanderDirection);
+        }
+
+        void PickNewWanderDirection()
+        {
+            if (Random.value < WanderPauseChance)
+            {
+                wanderDirection = Vector3.zero;
+                wanderDirectionTimer = Random.Range(WanderPauseMinSeconds, WanderPauseMaxSeconds);
+                return;
+            }
+
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            wanderDirection = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+            wanderDirectionTimer = Random.Range(WanderMinSeconds, WanderMaxSeconds);
         }
 
         Vector3 GetFleeOverPlateauEdgeDirection(Vector3 toPlayer)

@@ -1,6 +1,7 @@
 using System.Collections;
 using MonsterMiner.Core;
 using MonsterMiner.UI;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.Player
@@ -108,9 +109,24 @@ namespace MonsterMiner.Player
             CurrentHealth = MaxHealth;
             OnHealthChanged?.Invoke(CurrentHealth, MaxHealth);
             controller?.Respawn(spawnPoint);
+            FaceQuarryCenterIfActive(ctx);
             ctx?.Inventory?.EnsureStarterPickaxeIfMissing(ctx.Database?.pickaxeItem);
             SetPlayerDisabled(false);
             IsDead = false;
+        }
+
+        static void FaceQuarryCenterIfActive(GameContext ctx)
+        {
+            if (ctx?.Player == null || ctx.CaveProgression == null || !ctx.CaveProgression.HasLandQuarry2 || ctx.CavernBounds == null)
+                return;
+
+            Vector3 centerWorld = QuarryCatalog.ResolveCenterWorld(ctx.CavernBounds);
+            Vector3 toCenter = centerWorld - ctx.Player.transform.position;
+            toCenter.y = 0f;
+            if (toCenter.sqrMagnitude <= 0.01f)
+                return;
+
+            ctx.Player.transform.rotation = Quaternion.LookRotation(toCenter.normalized, Vector3.up);
         }
 
         void SetPlayerDisabled(bool disabled)

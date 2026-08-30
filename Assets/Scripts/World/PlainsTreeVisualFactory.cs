@@ -1,3 +1,4 @@
+using MonsterMiner.Player;
 using MonsterMiner.Util;
 using UnityEngine;
 
@@ -88,6 +89,13 @@ namespace MonsterMiner.World
             foliageAccent.transform.localPosition = foliage.transform.localPosition + new Vector3(0f, foliageScale * 0.22f, 0f);
             foliageAccent.transform.localRotation = Quaternion.Euler(0f, (seed * 53f + 40f) % 360f, 0f);
             Object.Destroy(foliageAccent.GetComponent<Collider>());
+
+            var obstacle = tree.gameObject.AddComponent<PlainsTreeObstacle>();
+            obstacle.Configure(trunkHeight, foliageScale);
+
+            var treeCollider = tree.GetComponent<Collider>();
+            if (treeCollider != null)
+                DriveableTruck.RegisterPassThroughObstacle(treeCollider);
         }
     }
 }

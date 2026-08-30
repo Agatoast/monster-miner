@@ -16,6 +16,7 @@ namespace MonsterMiner.Combat
         Vector3 velocity;
         float gravityY;
         float elapsed;
+        float maxFlightSeconds = MaxFlightSeconds;
 
         public static void Begin(Monster thrownMonster, Vector3 startPoint, Vector3 targetPoint, bool slowFall)
         {
@@ -52,6 +53,7 @@ namespace MonsterMiner.Combat
 
             float duration = EstimateDuration(startPoint, targetPoint);
             velocity = ComputeBallisticVelocity(startPoint, targetPoint, gravityY, duration);
+            maxFlightSeconds = MaxFlightSeconds;
         }
 
         void FixedUpdate()
@@ -63,7 +65,7 @@ namespace MonsterMiner.Combat
             }
 
             elapsed += Time.fixedDeltaTime;
-            if (elapsed >= MaxFlightSeconds)
+            if (elapsed >= maxFlightSeconds)
             {
                 LandAtCurrentPosition();
                 return;

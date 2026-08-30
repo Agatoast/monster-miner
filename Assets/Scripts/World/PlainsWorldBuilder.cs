@@ -37,6 +37,74 @@ namespace MonsterMiner.World
             CreateClouds(root, plainsBaseY, bounds.Radius);
         }
 
+        public static void RebuildGroundExcludingLandFeatures(Transform contentRoot, CavernBounds bounds)
+        {
+            if (contentRoot == null || bounds == null)
+                return;
+
+            var plainsWorld = contentRoot.Find("PlateauBluff/PlainsWorld");
+            if (plainsWorld == null)
+                return;
+
+            var groundGo = plainsWorld.Find("PlainsGround");
+            if (groundGo == null)
+                return;
+
+            float plainsBaseY = GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float outerRadius = GetPlainsWorldRadius(bounds.Radius);
+            float innerRadius = WorldScale.Feet(2f);
+            const int visualRings = 48;
+            const int collisionRings = 36;
+            const int angularSegments = 72;
+
+            var renderMesh = BuildPlainsMesh(
+                plainsBaseY,
+                outerRadius,
+                innerRadius,
+                visualRings,
+                angularSegments,
+                ShouldExcludePlainsTriangle);
+            var collisionMesh = BuildPlainsTopCollisionMesh(
+                plainsBaseY,
+                outerRadius,
+                innerRadius,
+                collisionRings,
+                angularSegments,
+                ShouldExcludePlainsTriangle);
+
+            var meshFilter = groundGo.GetComponent<MeshFilter>();
+            if (meshFilter != null)
+                meshFilter.sharedMesh = renderMesh;
+
+            var collisionGo = groundGo.Find("PlainsGroundCollision");
+            if (collisionGo != null)
+            {
+                var collisionFilter = collisionGo.GetComponent<MeshFilter>();
+                if (collisionFilter != null)
+                    collisionFilter.sharedMesh = collisionMesh;
+
+                var meshCollider = collisionGo.GetComponent<MeshCollider>();
+                if (meshCollider != null)
+                    meshCollider.sharedMesh = collisionMesh;
+            }
+
+            Physics.SyncTransforms();
+        }
+
+        static bool ShouldExcludePlainsTriangle(float localX, float localZ)
+        {
+            if (LandQuarry2Boundary.ContainsLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsLakeLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsBeachLocal(localX, localZ))
+                return true;
+
+            return false;
+        }
+
         static float GetVisibleInnerRadius(float quarryNominalRadius)
         {
             float angle = 0f;
@@ -93,7 +161,7 @@ namespace MonsterMiner.World
             const int angularSegments = 72;
             float innerRadius = WorldScale.Feet(2f);
             float outerRadius = GetPlainsWorldRadius(quarryNominalRadius);
-            float collisionRadius = Mathf.Min(outerRadius, WorldScale.Miles(2f));
+            float collisionRadius = outerRadius;
 
             var groundGo = new GameObject("PlainsGround");
             groundGo.transform.SetParent(parent, false);
@@ -131,7 +199,8 @@ namespace MonsterMiner.World
             float radius,
             float innerRadius,
             int radialRings,
-            int angularSegments)
+            int angularSegments,
+            System.Func<float, float, bool> excludeTriangleAt = null)
         {
             var vertices = new List<Vector3>();
             for (int segment = 0; segment < angularSegments; segment++)
@@ -159,17 +228,53 @@ namespace MonsterMiner.World
                     int topLeft = ColumnVertex(segment, ring + 1);
                     int topRight = ColumnVertex(nextSegment, ring + 1);
 
-                    triangles.Add(bottomLeft);
-                    triangles.Add(topLeft);
-                    triangles.Add(topRight);
-                    triangles.Add(bottomLeft);
-                    triangles.Add(topRight);
-                    triangles.Add(bottomRight);
+                    Vector3 p0 = vertices[bottomLeft];
+                    Vector3 p1 = vertices[topLeft];
+                    Vector3 p2 = vertices[topRight];
+                    Vector3 triCenterA = (p0 + p1 + p2) / 3f;
+                    if (excludeTriangleAt == null || !excludeTriangleAt(triCenterA.x, triCenterA.z))
+                    {
+                        triangles.Add(bottomLeft);
+                        triangles.Add(topLeft);
+                        triangles.Add(topRight);
+                    }
+
+                    Vector3 p3 = vertices[bottomRight];
+                    Vector3 triCenterB = (p0 + p2 + p3) / 3f;
+                    if (excludeTriangleAt == null || !excludeTriangleAt(triCenterB.x, triCenterB.z))
+                    {
+                        triangles.Add(bottomLeft);
+                        triangles.Add(topRight);
+                        triangles.Add(bottomRight);
+                    }
                 }
             }
 
+            return BuildSolidCollisionMesh(vertices, triangles, WorldScale.PlateauGroundThickness * 2f);
+        }
+
+        static Mesh BuildSolidCollisionMesh(List<Vector3> topVertices, List<int> topTriangles, float thickness)
+        {
+            int topCount = topVertices.Count;
+            var vertices = new Vector3[topCount * 2];
+            for (int i = 0; i < topCount; i++)
+            {
+                vertices[i] = topVertices[i];
+                var top = topVertices[i];
+                vertices[i + topCount] = new Vector3(top.x, top.y - thickness, top.z);
+            }
+
+            var triangles = new List<int>(topTriangles.Count * 2);
+            triangles.AddRange(topTriangles);
+            for (int i = 0; i < topTriangles.Count; i += 3)
+            {
+                triangles.Add(topTriangles[i] + topCount);
+                triangles.Add(topTriangles[i + 2] + topCount);
+                triangles.Add(topTriangles[i + 1] + topCount);
+            }
+
             var mesh = new Mesh { name = "PlainsGroundCollision" };
-            mesh.indexFormat = vertices.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+            mesh.indexFormat = vertices.Length > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16;
             mesh.SetVertices(vertices);
             mesh.SetTriangles(triangles, 0);
             mesh.RecalculateNormals();
@@ -182,7 +287,8 @@ namespace MonsterMiner.World
             float radius,
             float innerRadius,
             int radialRings,
-            int angularSegments)
+            int angularSegments,
+            System.Func<float, float, bool> excludeTriangleAt = null)
         {
             var vertices = new List<Vector3>();
             var uvs = new List<Vector2>();
@@ -208,6 +314,9 @@ namespace MonsterMiner.World
 
             void AddTriangle(int a, int b, int c, float centerX, float centerZ)
             {
+                if (excludeTriangleAt != null && excludeTriangleAt(centerX, centerZ))
+                    return;
+
                 var target = ClassifyGroundPatch(centerX, centerZ) switch
                 {
                     PatchTypeScrub => scrubTriangles,

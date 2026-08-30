@@ -47,12 +47,12 @@ namespace MonsterMiner.Economy
 
             var slot = GameContext.Instance?.Inventory?.GetSelectedSlot();
             if (slot != null && !slot.IsEmpty && InventorySystem.IsSlotTestToken(slot.item))
-                return "Spin slot (test token) [E]";
+                return "Spin slot [E]";
 
             if (slot != null && !slot.IsEmpty && slot.item != null && slot.item.isMonsterDrop)
                 return "Spin slot (1 monster drop) [E]";
 
-            return "Spin slot (monster drop or test token) [E]";
+            return "Spin slot (monster drop) [E]";
         }
 
         public bool CanInteract(GameObject interactor) => !spinning;
@@ -66,14 +66,14 @@ namespace MonsterMiner.Economy
             var slot = ctx.Inventory.GetSelectedSlot();
             if (slot == null || slot.IsEmpty || slot.item == null)
             {
-                ctx.Hud?.ShowMessage("Select a monster drop or the Slot Test Token");
+                ctx.Hud?.ShowMessage("Select a monster drop");
                 return;
             }
 
             bool isTestToken = InventorySystem.IsSlotTestToken(slot.item);
             if (!isTestToken && !slot.item.isMonsterDrop)
             {
-                ctx.Hud?.ShowMessage("Select a monster drop or the Slot Test Token");
+                ctx.Hud?.ShowMessage("Select a monster drop");
                 return;
             }
 

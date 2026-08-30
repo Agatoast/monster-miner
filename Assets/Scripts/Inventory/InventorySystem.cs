@@ -12,6 +12,7 @@ namespace MonsterMiner.Inventory
         public ItemDefinition item;
         public int count;
         public bool fromShopPurchase;
+        public int shopPurchasePrice;
         public bool IsEmpty => item == null || count <= 0;
     }
 
@@ -83,6 +84,7 @@ namespace MonsterMiner.Inventory
             slot.item = item;
             slot.count = count;
             slot.fromShopPurchase = false;
+            slot.shopPurchasePrice = 0;
             OnInventoryChanged?.Invoke();
         }
 
@@ -130,7 +132,7 @@ namespace MonsterMiner.Inventory
             return Mathf.Max(1, baseHits - GetTotalMiningBonus());
         }
 
-        public bool TryAdd(ItemDefinition item, int amount = 1, bool fromShopPurchase = false)
+        public bool TryAdd(ItemDefinition item, int amount = 1, bool fromShopPurchase = false, int shopPurchasePrice = 0)
         {
             if (item == null || amount <= 0)
                 return false;
@@ -161,7 +163,7 @@ namespace MonsterMiner.Inventory
                 return false;
 
             if (fromShopPurchase)
-                return TryAddShopPurchase(item);
+                return TryAddShopPurchase(item, shopPurchasePrice);
 
             int remaining = amount;
             if (item.stackLimit > 1)
@@ -199,7 +201,7 @@ namespace MonsterMiner.Inventory
             return remaining == 0;
         }
 
-        bool TryAddShopPurchase(ItemDefinition item)
+        bool TryAddShopPurchase(ItemDefinition item, int shopPurchasePrice)
         {
             if (item.stackLimit > 1)
             {
@@ -210,6 +212,8 @@ namespace MonsterMiner.Inventory
                         continue;
 
                     slot.count++;
+                    if (slot.shopPurchasePrice <= 0)
+                        slot.shopPurchasePrice = shopPurchasePrice;
                     OnInventoryChanged?.Invoke();
                     return true;
                 }
@@ -224,11 +228,23 @@ namespace MonsterMiner.Inventory
                 slot.item = item;
                 slot.count = 1;
                 slot.fromShopPurchase = true;
+                slot.shopPurchasePrice = shopPurchasePrice;
                 OnInventoryChanged?.Invoke();
                 return true;
             }
 
             return false;
+        }
+
+        public static int GetShopSellBackValue(InventorySlot slot)
+        {
+            if (slot == null || slot.IsEmpty)
+                return 0;
+
+            if (slot.fromShopPurchase && slot.shopPurchasePrice > 0)
+                return slot.shopPurchasePrice / 2;
+
+            return slot.item.sellValue;
         }
 
         public bool CanAddShopPurchase(ItemDefinition item)
@@ -339,6 +355,7 @@ namespace MonsterMiner.Inventory
                 slot.item = null;
                 slot.count = 0;
                 slot.fromShopPurchase = false;
+                slot.shopPurchasePrice = 0;
             }
             OnInventoryChanged?.Invoke();
             return true;
@@ -386,6 +403,7 @@ namespace MonsterMiner.Inventory
                     slot.item = null;
                     slot.count = 0;
                     slot.fromShopPurchase = false;
+                    slot.shopPurchasePrice = 0;
                 }
             }
 
@@ -446,6 +464,7 @@ namespace MonsterMiner.Inventory
             (from.item, to.item) = (to.item, from.item);
             (from.count, to.count) = (to.count, from.count);
             (from.fromShopPurchase, to.fromShopPurchase) = (to.fromShopPurchase, from.fromShopPurchase);
+            (from.shopPurchasePrice, to.shopPurchasePrice) = (to.shopPurchasePrice, from.shopPurchasePrice);
             OnInventoryChanged?.Invoke();
             return true;
         }
@@ -472,6 +491,7 @@ namespace MonsterMiner.Inventory
                 slot.item = null;
                 slot.count = 0;
                 slot.fromShopPurchase = false;
+                slot.shopPurchasePrice = 0;
             }
 
             OnInventoryChanged?.Invoke();

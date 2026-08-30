@@ -146,10 +146,12 @@ namespace MonsterMiner.Util
                 for (int i = 0; i < sources.Length; i++)
                 {
                     var source = sources[i];
-                    if (source == null)
-                        continue;
-
                     var material = template != null ? new Material(template) : new Material(urpLit);
+                    if (source == null)
+                    {
+                        remapped[i] = material;
+                        continue;
+                    }
                     var albedo = source.HasProperty("_MainTex") ? source.GetTexture("_MainTex") : null;
                     if (albedo == null && source.HasProperty("_BaseMap"))
                         albedo = source.GetTexture("_BaseMap");

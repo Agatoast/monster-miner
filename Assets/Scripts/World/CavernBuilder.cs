@@ -72,29 +72,16 @@ namespace MonsterMiner.World
 
         void BuildShopArea(CavernBounds bounds)
         {
-            const float counterLocalZ = -1.1f;
-            const float counterLocalY = 0.6f;
-
             float shopAnchorZ = WorldScale.Feet(WorldScale.ShopDistanceFromSpawnFeet);
+            const float counterLocalZ = -1.1f;
 
-            var shopRoot = new GameObject("ShopArea");
-            shopRoot.transform.SetParent(contentRoot, false);
-            shopRoot.transform.localPosition = new Vector3(0f, 0f, shopAnchorZ);
-
-            var counter = PrimitiveFactory.CreatePrimitive(
-                PrimitiveType.Cube,
-                shopRoot.transform.position,
-                new Vector3(3f, 1.2f, 1f),
-                new Color(0.45f, 0.28f, 0.15f),
-                "ShopCounter",
-                shopRoot.transform);
-            counter.transform.localPosition = new Vector3(0f, counterLocalY, counterLocalZ);
-
-            LowPolyPeopleVisualFactory.CreateShopkeeper(
-                shopRoot.transform,
-                Vector3.zero,
-                Quaternion.Euler(0f, 180f, 0f),
-                bounds.SampleFloorWorldY(0f, shopAnchorZ));
+            var shop = ShopAreaVisualFactory.Create(
+                contentRoot,
+                new Vector3(0f, 0f, shopAnchorZ),
+                Quaternion.identity,
+                bounds.SampleFloorWorldY(2.5f, shopAnchorZ + counterLocalZ),
+                ShopAreaShopkeeperType.Normal,
+                shopkeeperFloorWorldY: bounds.SampleFloorWorldY(0f, shopAnchorZ));
 
             float houseLocalZ = shopAnchorZ + WorldScale.Feet(30f);
             HandpaintedHouseVisualFactory.CreateOnPlateau(
@@ -103,33 +90,18 @@ namespace MonsterMiner.World
                 Quaternion.Euler(0f, 180f, 0f),
                 bounds.SamplePlateauFloorWorldY(0f, houseLocalZ));
 
-            var board = PrimitiveFactory.CreatePrimitive(
-                PrimitiveType.Cube,
-                shopRoot.transform.position,
-                new Vector3(0.1f, 1.6f, 2.2f),
-                new Color(0.35f, 0.25f, 0.12f),
-                "ShopBoard",
-                shopRoot.transform);
-            board.transform.localPosition = new Vector3(-2.2f, 1.8f, counterLocalZ - WorldScale.Feet(3f));
-
-            var slotCab = SlotMachineVisualFactory.CreateShopSlotMachine(
-                shopRoot.transform,
-                new Vector3(2.5f, 0f, counterLocalZ),
-                Quaternion.Euler(0f, 180f, 0f),
-                bounds.SampleFloorWorldY(2.5f, shopAnchorZ + counterLocalZ));
-
             var ctx = GameContext.Instance;
-            if (ctx != null)
+            if (ctx != null && shop.Board != null)
             {
-                ctx.Shop = board.AddComponent<ShopManager>();
-                ctx.Shop.Initialize(board.transform);
+                ctx.Shop = shop.Board.AddComponent<ShopManager>();
+                ctx.Shop.Initialize(shop.Board.transform);
 
-                if (slotCab != null)
+                if (shop.SlotCab != null)
                 {
-                    ctx.SlotMachine = slotCab.AddComponent<SlotMachine>();
+                    ctx.SlotMachine = shop.SlotCab.AddComponent<SlotMachine>();
                     ctx.SlotMachine.Initialize(
-                        slotCab.transform,
-                        SlotMachineVisualFactory.GetVisual(slotCab));
+                        shop.SlotCab.transform,
+                        SlotMachineVisualFactory.GetVisual(shop.SlotCab));
                 }
             }
         }

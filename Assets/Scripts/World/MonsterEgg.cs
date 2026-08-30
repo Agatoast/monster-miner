@@ -50,6 +50,8 @@ namespace MonsterMiner.World
             creatureTypeId = definition?.monsterId;
             currentHealth = MaxHealth;
             eggCollider = GetComponent<Collider>();
+            if (eggCollider != null)
+                DriveableTruck.RegisterPassThroughObstacle(eggCollider);
             RefreshEggSkin();
         }
 
@@ -112,6 +114,25 @@ namespace MonsterMiner.World
 
             if (currentHealth <= 0f)
                 BeginHatching();
+        }
+
+        public bool TryInstantHatchFromTruck(Vector3 truckVelocity)
+        {
+            if (isCarried)
+                return false;
+
+            var ctx = GameContext.Instance;
+            var pos = transform.position;
+
+            ctx?.Hud?.ClearHatchingMessage();
+            EggShellBurstEffect.Spawn(pos, gameObject);
+            var monster = ctx?.SpawnManager?.HatchMonster(pos, hatchDefinition, creatureTypeId);
+            Destroy(gameObject);
+
+            if (monster != null)
+                monster.LaunchFromTruck(truckVelocity);
+
+            return monster != null;
         }
 
         void BeginHatching()

@@ -63,7 +63,11 @@ namespace MonsterMiner.World
                 targetCenterY = groundY + bottomOffset + WorldScale.SpawnDropHeight;
             }
 
-            if (feetY < groundY + WorldScale.SpawnDropHeight)
+            var player = GetComponent<PlayerController>();
+            bool inPlainsJump = player != null && player.IsInPlainsJump;
+            bool belowGround = feetY < groundY + WorldScale.SpawnDropHeight;
+            bool hovering = !inPlainsJump && feetY > targetCenterY + WorldScale.Feet(0.25f);
+            if (belowGround || hovering)
             {
                 Vector3 pos = rb.position;
                 pos.y = targetCenterY;
@@ -77,6 +81,15 @@ namespace MonsterMiner.World
 
         public static bool ShouldSupportAt(Vector3 local, float plateauRadius)
         {
+            if (QuarryCatalog.IsLandQuarry2Local(local.x, local.z))
+                return true;
+
+            if (LakeCatalog.IsOpenWaterLocal(local.x, local.z))
+                return false;
+
+            if (LakeCatalog.IsBeachLocal(local.x, local.z))
+                return true;
+
             if (PlateauBoundary.IsOnPlateau(local.x, local.z, plateauRadius))
                 return false;
 
@@ -105,7 +118,16 @@ namespace MonsterMiner.World
                 return 0f;
 
             if (ShouldSupportAt(new Vector3(localX, 0f, localZ), bounds.Radius))
+            {
+                if (QuarryCatalog.IsLandQuarry2Local(localX, localZ))
+                {
+                    float lowerBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+                    float localY = LandQuarry2Boundary.SampleSnowFloorLocalY(localX, localZ, lowerBase);
+                    return bounds.transform.TransformPoint(new Vector3(localX, localY, localZ)).y;
+                }
+
                 return PlainsWorldBuilder.SamplePlainsWorldY(bounds.transform, localX, localZ);
+            }
 
             return CreatureSurfaceSampler.SampleWorldY(bounds, localX, localZ);
         }

@@ -122,6 +122,10 @@ namespace MonsterMiner.UI
                 mapSize,
                 mapSize);
 
+            float mapRotation = -GetPlayerFacingMapAngle(ctx);
+            var savedMatrix = GUI.matrix;
+            GUIUtility.RotateAroundPivot(mapRotation, mapRect.center);
+
             GUI.color = Color.white;
             if (mapTexture != null)
                 GUI.DrawTexture(mapRect, mapTexture);
@@ -130,6 +134,8 @@ namespace MonsterMiner.UI
             DrawPlayerMarker(mapRect, ctx);
             DrawEdgeMarkers(mapRect, ctx, playerLocal);
             DrawCompass(mapRect);
+
+            GUI.matrix = savedMatrix;
 
             GUI.color = new Color(0.85f, 0.85f, 0.8f);
             GUI.Label(
@@ -209,6 +215,17 @@ namespace MonsterMiner.UI
                 return;
 
             Vector2 screen = mapRect.center;
+            float angle = GetPlayerFacingMapAngle(ctx);
+            DrawColoredArrow(screen, angle, Color.yellow, PlayerArrowSize);
+
+            GUI.color = Color.white;
+            GUI.Label(new Rect(screen.x - 24f, screen.y + PlayerArrowSize * 0.45f, 48f, 16f), "You", labelStyle);
+        }
+
+        static float GetPlayerFacingMapAngle(GameContext ctx)
+        {
+            if (ctx?.Player == null)
+                return 0f;
 
             Vector3 look = ctx.Player.ViewCamera != null
                 ? ctx.Player.ViewCamera.transform.forward
@@ -219,11 +236,7 @@ namespace MonsterMiner.UI
             forward.Normalize();
 
             var screenDir = new Vector2(forward.x, -forward.z);
-            float angle = Vector2.SignedAngle(new Vector2(0f, -1f), screenDir);
-            DrawColoredArrow(screen, angle, Color.yellow, PlayerArrowSize);
-
-            GUI.color = Color.white;
-            GUI.Label(new Rect(screen.x - 24f, screen.y + PlayerArrowSize * 0.45f, 48f, 16f), "You", labelStyle);
+            return Vector2.SignedAngle(new Vector2(0f, -1f), screenDir);
         }
 
         static void DrawCompass(Rect mapRect)
@@ -311,7 +324,11 @@ namespace MonsterMiner.UI
                     return new Color32(168, 142, 98, 255);
 
                 if (QuarryCatalog.IsLandQuarry2Local(localX, localZ))
-                    return new Color32(156, 136, 92, 255);
+                {
+                    float snow = Mathf.PerlinNoise(localX * 0.018f + 12.4f, localZ * 0.018f + 8.7f);
+                    byte tone = (byte)Mathf.Clamp(248f + snow * 7f, 245f, 255f);
+                    return new Color32(tone, tone, tone, 255);
+                }
 
                 return new Color32(148, 122, 86, 255);
             }
@@ -329,6 +346,12 @@ namespace MonsterMiner.UI
 
             if (bounds != null && !WorldRegion.IsLandLocalRegion(bounds, localX, localZ))
                 return new Color32(40, 36, 30, 255);
+
+            if (LakeCatalog.IsBeachLocal(localX, localZ))
+                return new Color32(200, 180, 130, 255);
+
+            if (LakeCatalog.IsOpenWaterLocal(localX, localZ))
+                return new Color32(30, 96, 158, 255);
 
             float grass = Mathf.PerlinNoise(localX * 0.012f + 4.1f, localZ * 0.012f + 9.7f);
             byte g = (byte)Mathf.Clamp(70 + grass * 50f, 60f, 130f);

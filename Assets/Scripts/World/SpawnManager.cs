@@ -15,6 +15,7 @@ namespace MonsterMiner.World
         const int InitialEggCount = 10;
         const int PlateauPebbleCount = 10;
         const int PlateauEggCount = 20;
+        const int JarlLandEggCount = PlateauEggCount * 3;
         const float PebbleRespawnDelay = 10f;
         const int EggSpawnAttempts = 64;
 
@@ -53,6 +54,7 @@ namespace MonsterMiner.World
             SpawnInitialPebbles();
             SpawnPlateauPebbles();
             SpawnPlateauEggs();
+            SpawnJarlLandEggs();
             AssignStoredEggCreatureTypes();
             ResnapFloorObjects();
             if (contentRoot != null && bounds != null)
@@ -244,6 +246,27 @@ namespace MonsterMiner.World
             return true;
         }
 
+        public bool TrySpawnLandCreature(Vector3 spawnPoint, Transform parent = null)
+        {
+            if (bounds == null || database == null)
+                return false;
+
+            if (!bounds.IsClearForSpawnAt(spawnPoint, LandEggClearance))
+                return false;
+
+            if (!TryPickRandomLandCreature(out var creatureTypeId, out var definition))
+                return false;
+
+            var monster = HatchMonster(spawnPoint, definition, creatureTypeId);
+            if (monster == null)
+                return false;
+
+            if (parent != null)
+                monster.transform.SetParent(parent, true);
+
+            return true;
+        }
+
         MonsterEgg FinishLandEggSpawn(Vector3 spawnPoint)
         {
             if (!TryPickRandomLandCreature(out var creatureTypeId, out var definition))
@@ -293,6 +316,26 @@ namespace MonsterMiner.World
             {
                 attempts++;
                 if (!bounds.TryGetRandomClearPlateauPoint(plateauEggClearance, 1, out var spawnPoint, forEggSpawn: true))
+                    continue;
+
+                if (FinishEggSpawn(spawnPoint) != null)
+                    spawned++;
+            }
+        }
+
+        void SpawnJarlLandEggs()
+        {
+            if (GameContext.Instance?.CaveProgression == null || !GameContext.Instance.CaveProgression.HasLandQuarry2)
+                return;
+
+            const float jarlLandEggClearance = 1.2f;
+            int spawned = 0;
+            int attempts = 0;
+            int maxAttempts = JarlLandEggCount * PlateauSpawnAttempts;
+            while (spawned < JarlLandEggCount && attempts < maxAttempts)
+            {
+                attempts++;
+                if (!bounds.TryGetRandomClearJarlLandPoint(jarlLandEggClearance, 1, out var spawnPoint, jarlLandEggClearance))
                     continue;
 
                 if (FinishEggSpawn(spawnPoint) != null)

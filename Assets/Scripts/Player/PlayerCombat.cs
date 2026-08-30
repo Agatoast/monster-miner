@@ -44,6 +44,9 @@ namespace MonsterMiner.Player
             if (PlayerController.IsGameplayBlocked())
                 return;
 
+            if (GetComponent<PlayerVehicleMount>()?.IsDriving == true)
+                return;
+
             if (GameContext.Instance?.Shop?.IsMenuOpen == true)
                 return;
 

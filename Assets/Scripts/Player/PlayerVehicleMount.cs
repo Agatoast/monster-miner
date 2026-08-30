@@ -8,9 +8,8 @@ namespace MonsterMiner.Player
     public class PlayerVehicleMount : MonoBehaviour
     {
         const float DismountSideOffset = 2.2f;
+        const float CargoDismountSideOffsetFeet = 5f;
         const float CargoMoveSpeedMph = 8f;
-        static readonly Vector3 DriverSeatLocalOffset = new Vector3(0.05f, -0.58f, 0.08f);
-        static readonly Vector3 DriverSeatLocalEuler = Vector3.zero;
 
         public enum MountMode
         {
@@ -26,6 +25,7 @@ namespace MonsterMiner.Player
         Renderer bodyRenderer;
         MountMode mode = MountMode.None;
         float driverHeadYaw;
+        RigidbodyInterpolation storedInterpolation;
 
         public bool IsMounted => mode != MountMode.None;
         public bool IsDriving => mode == MountMode.Driver;
@@ -54,25 +54,24 @@ namespace MonsterMiner.Player
             driverHeadYaw = 0f;
             truck.SetDriver(this);
 
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-            rb.isKinematic = true;
+            BeginMountedPhysics(truck, ignoreBedCollisions: true);
 
             if (bodyCollider != null)
                 bodyCollider.enabled = false;
             if (bodyRenderer != null)
-                bodyRenderer.enabled = true;
+                bodyRenderer.enabled = false;
 
             Transform seat = truck.Seat;
             transform.SetParent(seat, false);
-            transform.localPosition = DriverSeatLocalOffset;
-            transform.localRotation = Quaternion.Euler(DriverSeatLocalEuler);
+            AlignDriverCameraToSeat();
 
-            controller.ResetViewPitch();
+            controller.ResetViewPitch(8f);
             driverHeadYaw = 0f;
 
             IndustrialSmallTruckVisualFactory.ApplyEquippedSkin(truck.gameObject);
+            truck.SetDriverViewHidden(true);
             GameContext.Instance?.Hud?.ShowMessage("W to throttle, S to brake/reverse. [E] to get out front.");
+            GameContext.Instance?.Hud?.ShowCenterMessage("Avoid the rocks!");
             return true;
         }
 
@@ -88,9 +87,7 @@ namespace MonsterMiner.Player
             mode = MountMode.Cargo;
             truck.SetCargoOccupant(this);
 
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-            rb.isKinematic = true;
+            BeginMountedPhysics(truck, ignoreBedCollisions: false);
 
             if (bodyCollider != null)
                 bodyCollider.enabled = false;
@@ -138,8 +135,51 @@ namespace MonsterMiner.Player
             driverHeadYaw = Mathf.Clamp(driverHeadYaw + deltaDegrees, -75f, 75f);
         }
 
+        void BeginMountedPhysics(DriveableTruck truck, bool ignoreBedCollisions)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            storedInterpolation = rb.interpolation;
+            rb.interpolation = RigidbodyInterpolation.None;
+            rb.isKinematic = true;
+            rb.detectCollisions = false;
+            SetIgnoreTruckCollisions(truck, true, ignoreBedCollisions);
+        }
+
+        void AlignDriverCameraToSeat()
+        {
+            if (currentTruck == null || currentTruck.Seat == null)
+                return;
+
+            Vector3 headLocal = controller != null && controller.Head != null
+                ? controller.Head.localPosition
+                : new Vector3(0f, 0.65f, 0f);
+            transform.localPosition = -headLocal;
+            transform.localRotation = Quaternion.identity;
+        }
+
+        void LateUpdate()
+        {
+            if (IsDriving && currentTruck != null)
+            {
+                AlignDriverCameraToSeat();
+                return;
+            }
+
+            if (!IsInCargo || currentTruck == null)
+                return;
+
+            var stand = currentTruck.CargoEntryLocalPosition;
+            var local = transform.localPosition;
+            if (Mathf.Abs(local.y - stand.y) > 0.001f)
+                transform.localPosition = new Vector3(local.x, stand.y, local.z);
+        }
+
         void FixedUpdate()
         {
+            if (IsDriving)
+                return;
+
             if (!IsInCargo || currentTruck == null || controller == null)
                 return;
 
@@ -175,28 +215,43 @@ namespace MonsterMiner.Player
             else
                 truck.ClearCargoOccupant(this);
 
-            Vector3 exitDirection = exitedFront ? -truck.transform.right : -truck.transform.forward;
-            if (exitDirection.sqrMagnitude < 0.01f)
-                exitDirection = Vector3.right;
-            exitDirection.Normalize();
+            if (exitedFront)
+                truck.SetDriverViewHidden(false);
 
-            Vector3 dismountWorldPosition = truck.transform.position
-                + exitDirection * DismountSideOffset
-                + Vector3.up * 0.5f;
+            Vector3 dismountWorldPosition;
+            Vector3 lookDirection;
 
+            if (exitedFront)
+            {
+                lookDirection = truck.transform.forward;
+                dismountWorldPosition = truck.transform.position
+                    - truck.transform.right * DismountSideOffset
+                    + Vector3.up * 0.5f;
+            }
+            else
+            {
+                lookDirection = truck.transform.forward;
+                dismountWorldPosition = truck.transform.position
+                    - truck.transform.right * WorldScale.Feet(CargoDismountSideOffsetFeet);
+            }
+
+            SetIgnoreTruckCollisions(truck, false, ignoreBedColliders: true);
             transform.SetParent(null, true);
             if (controller != null)
                 transform.position = controller.SnapToFloorWorld(dismountWorldPosition);
             else
                 transform.position = dismountWorldPosition;
 
-            transform.rotation = Quaternion.LookRotation(
-                exitedFront ? truck.transform.forward : exitDirection,
-                Vector3.up);
+            transform.rotation = Quaternion.LookRotation(lookDirection, Vector3.up);
 
+            rb.detectCollisions = true;
             rb.isKinematic = false;
+            rb.interpolation = storedInterpolation;
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+            rb.position = transform.position;
+            rb.rotation = transform.rotation;
 
             if (bodyCollider != null)
                 bodyCollider.enabled = true;
@@ -208,6 +263,33 @@ namespace MonsterMiner.Player
 
             controller?.ResetViewPitch();
             return true;
+        }
+
+        void SetIgnoreTruckCollisions(DriveableTruck truck, bool ignore, bool ignoreBedColliders = true)
+        {
+            if (truck == null)
+                return;
+
+            Transform bed = truck.CargoBed;
+            var truckColliders = truck.GetComponentsInChildren<Collider>(true);
+            var playerColliders = GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < truckColliders.Length; i++)
+            {
+                var truckCollider = truckColliders[i];
+                if (truckCollider == null || truckCollider.isTrigger)
+                    continue;
+
+                if (!ignoreBedColliders && bed != null && truckCollider.transform.IsChildOf(bed))
+                    continue;
+
+                for (int j = 0; j < playerColliders.Length; j++)
+                {
+                    if (playerColliders[j] == null)
+                        continue;
+
+                    Physics.IgnoreCollision(truckCollider, playerColliders[j], ignore);
+                }
+            }
         }
     }
 }

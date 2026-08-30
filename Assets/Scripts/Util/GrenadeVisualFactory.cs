@@ -43,13 +43,15 @@ namespace MonsterMiner.Util
             if (templateRoot == null)
                 return null;
 
-            var grenade = Object.Instantiate(templateRoot, parent, false);
-            grenade.SetActive(true);
+            var grenade = Object.Instantiate(templateRoot);
+            grenade.SetActive(false);
             grenade.name = objectName;
+            DisableColliders(grenade);
+            grenade.transform.SetParent(parent, false);
             grenade.transform.localPosition = localPosition;
             grenade.transform.localRotation = localRotation;
             grenade.transform.localScale = localScale;
-            DisableColliders(grenade);
+            grenade.SetActive(true);
             return grenade;
         }
 
@@ -71,7 +73,10 @@ namespace MonsterMiner.Util
         static void DisableColliders(GameObject root)
         {
             foreach (var collider in root.GetComponentsInChildren<Collider>(true))
+            {
+                collider.enabled = false;
                 Object.Destroy(collider);
+            }
         }
     }
 }

@@ -133,6 +133,9 @@ namespace MonsterMiner.UI
             if (GrenadeThrowController.IsGrenadeEquipped)
                 return false;
 
+            if (ctx.Player != null && ctx.Player.GetComponent<PlayerVehicleMount>()?.IsDriving == true)
+                return false;
+
             var slot = ctx.Inventory?.GetSelectedSlot();
             return InventorySystem.IsRangedWeaponItem(slot?.item);
         }

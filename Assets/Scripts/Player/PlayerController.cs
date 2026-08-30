@@ -29,6 +29,7 @@ namespace MonsterMiner.Player
         public Camera ViewCamera => viewCamera;
         public Transform Head => head;
         public bool IsGameplayCursorLocked => gameplayCursorLocked;
+        public bool IsInPlainsJump => Mathf.Abs(plainsJumpVelocity) > 0.01f;
 
         float JumpVelocity => Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y) * CharacterHeight * 0.5f);
 
@@ -83,6 +84,11 @@ namespace MonsterMiner.Player
 
             if (Input.GetKeyDown(KeyCode.Space) && !IsUiCursorMode() && !IsGameplayBlocked())
                 jumpRequested = true;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (Input.GetKeyDown(KeyCode.F10) && !IsUiCursorMode() && !IsGameplayBlocked())
+                PlayerSpawnPersistence.SetSpawnToCurrentPlayerPosition();
+#endif
         }
 
         void LateUpdate()
@@ -241,12 +247,7 @@ namespace MonsterMiner.Player
             var mount = GetComponent<PlayerVehicleMount>();
             if (mount != null && mount.IsDriving && mount.CurrentTruck != null)
             {
-                float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-                mount.AddDriverHeadYaw(mouseX);
-
-                pitch -= Input.GetAxis("Mouse Y") * mouseSensitivity;
-                pitch = Mathf.Clamp(pitch, -45f, 65f);
-                head.localRotation = Quaternion.Euler(pitch, mount.DriverHeadYaw, 0f);
+                head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
                 return;
             }
 
@@ -281,8 +282,8 @@ namespace MonsterMiner.Player
                 bottomOffset = (bodyCollider.height * 0.5f - bodyCollider.center.y) * transform.lossyScale.y;
 
             var origin = transform.position - Vector3.up * bottomOffset + Vector3.up * 0.08f;
-            if (Physics.Raycast(origin, Vector3.down, probeDistance, ~0, QueryTriggerInteraction.Ignore)
-                || Physics.SphereCast(origin, 0.18f, Vector3.down, out _, probeDistance, ~0, QueryTriggerInteraction.Ignore))
+            if (RayHitsGround(origin, Vector3.down, probeDistance)
+                || SphereHitsGround(origin, 0.18f, Vector3.down, probeDistance))
                 return true;
 
             var bounds = GameContext.Instance?.CavernBounds;
@@ -296,6 +297,33 @@ namespace MonsterMiner.Player
             float groundY = PlainsGroundSupport.SampleSupportGroundWorldY(bounds, local.x, local.z);
             float feetY = transform.position.y - bottomOffset;
             return feetY <= groundY + bounds.SpawnRestHeight + 0.2f;
+        }
+
+        bool RayHitsGround(Vector3 origin, Vector3 direction, float distance)
+        {
+            var hits = Physics.RaycastAll(origin, direction, distance, ~0, QueryTriggerInteraction.Ignore);
+            return HasExternalGroundHit(hits);
+        }
+
+        bool SphereHitsGround(Vector3 origin, float radius, Vector3 direction, float distance)
+        {
+            var hits = Physics.SphereCastAll(origin, radius, direction, distance, ~0, QueryTriggerInteraction.Ignore);
+            return HasExternalGroundHit(hits);
+        }
+
+        bool HasExternalGroundHit(RaycastHit[] hits)
+        {
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var col = hits[i].collider;
+                if (col == null)
+                    continue;
+                if (col.transform == transform || col.transform.IsChildOf(transform))
+                    continue;
+                return true;
+            }
+
+            return false;
         }
 
         public void ResetViewPitch(float newPitch = 0f)

@@ -154,7 +154,7 @@ namespace MonsterMiner.Core
             db.monsters.Add(MakeMonster("quest_boss", "Quest Monster", 80f, 11f, 16f, 1.6f, new Color(0.6f, 0.1f, 0.8f), caveKey, 0f, boss: true));
 
             db.pickaxeUpgrade = MakeUpgrade("pickaxe_dmg", "Pickaxe Upgrade", "Upgrade pickaxe mining power and head color.", UpgradeType.PickaxeDamage, 20, 1f, 5);
-            db.inventoryUpgrade = MakeUpgrade("inv_slot", "Inventory Upgrade", "Add one inventory slot.", UpgradeType.InventorySlot, 8, 1f, 4);
+            db.inventoryUpgrade = MakeUpgrade("inv_slot", "Inventory Upgrade", "Add one inventory slot.", UpgradeType.InventorySlot, 8, 1f, 7);
             db.waterPurchase = MakeUpgrade("water", "Water", "Refill thirst.", UpgradeType.Water, 4, 100f, int.MaxValue);
             db.knifeMapListing = MakeUpgrade("knife_unlock", "Knife", "Buy a knife weapon.", UpgradeType.WeaponUnlock, 9, 1f, 1, db.knifeItem);
             db.spearListing = MakeUpgrade("spear_shop", "Spear", "Buy a spear.", UpgradeType.WeaponUnlock, 15, 1f, 1, db.spearItem);

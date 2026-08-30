@@ -29,6 +29,9 @@ namespace MonsterMiner.Player
         Quaternion pickaxeGripRestRotation;
         Vector3 pickaxeGripRestLocalPosition;
         Vector3 handsRestLocalPosition;
+        Transform handsRestParent;
+        Quaternion handsRestLocalRotation;
+        bool attachedToSteeringWheel;
 
         public Transform RightArmRoot => rightArmRoot != null ? rightArmRoot : handsInstance?.transform;
         public Transform RightHandAnchor => rightHandAnchor != null ? rightHandAnchor : RightArmRoot;
@@ -37,6 +40,37 @@ namespace MonsterMiner.Player
         public Transform KnifeGripAnchor => knifeGripAnchor != null ? knifeGripAnchor : RightHandAnchor;
         public Transform SpearGripAnchor => spearGripAnchor != null ? spearGripAnchor : KnifeGripAnchor;
         public bool HasMesh => handsInstance != null;
+
+        public void SetVisible(bool visible)
+        {
+            if (handsInstance != null)
+                handsInstance.SetActive(visible);
+        }
+
+        public void ApplySteeringGrip(float wheelZDegrees)
+        {
+            if (handsInstance == null)
+                return;
+
+            SetAnimationEnabled(false);
+            handsInstance.SetActive(true);
+            handsInstance.transform.SetParent(cameraTransform, false);
+            handsInstance.transform.localPosition = new Vector3(0f, -0.10f, 0.43f);
+            handsInstance.transform.localRotation = Quaternion.Euler(18f, 0f, wheelZDegrees);
+            attachedToSteeringWheel = true;
+        }
+
+        public void DetachFromSteeringWheel()
+        {
+            if (handsInstance == null || !attachedToSteeringWheel)
+                return;
+
+            handsInstance.transform.SetParent(handsRestParent != null ? handsRestParent : cameraTransform, false);
+            handsInstance.transform.localPosition = handsRestLocalPosition;
+            handsInstance.transform.localRotation = handsRestLocalRotation;
+            attachedToSteeringWheel = false;
+            SetAnimationEnabled(true);
+        }
 
         public VrHandsVisualFactory(Transform cameraTransform)
         {
@@ -58,7 +92,9 @@ namespace MonsterMiner.Player
             handsInstance.transform.localPosition = HandsLocalPosition;
             handsInstance.transform.localRotation = Quaternion.Euler(HandsLocalEuler);
             handsInstance.transform.localScale = Vector3.one * HandsLocalScale;
+            handsRestParent = cameraTransform;
             handsRestLocalPosition = HandsLocalPosition;
+            handsRestLocalRotation = Quaternion.Euler(HandsLocalEuler);
 
             DisableColliders(handsInstance);
 

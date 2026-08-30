@@ -16,6 +16,9 @@ namespace MonsterMiner.World
         static Material plainsGrassMaterial;
         static Material plainsMeadowMaterial;
         static Material plainsScrubMaterial;
+        static Material snowMaterial;
+        static Material waterMaterial;
+        static Material sandMaterial;
         static Material vistaCanopyMaterial;
         static Material unlitVistaCanopyMaterial;
         static Material unlitPlainsMaterial;
@@ -145,6 +148,119 @@ namespace MonsterMiner.World
                 crackStrength: 0.18f);
             plainsScrubMaterial.name = "PlainsScrub";
             return plainsScrubMaterial;
+        }
+
+        const string AntarcticaGroundResourcePath = "Textures/Terrain/antarctica_ground";
+        const float SnowTileScale = 1.25f;
+
+        public static Material GetSnowMaterial()
+        {
+            if (snowMaterial != null)
+                Object.Destroy(snowMaterial);
+
+            snowMaterial = CreateSnowMaterial();
+            return snowMaterial;
+        }
+
+        static Material CreateSnowMaterial()
+        {
+            var mat = CreateUnlitMaterial(Color.white, "QuarrySnow");
+
+            var albedo = Resources.Load<Texture2D>(AntarcticaGroundResourcePath);
+            if (albedo == null)
+            {
+                Debug.LogWarning($"Monster Miner: snow texture missing at Resources/{AntarcticaGroundResourcePath}.");
+                albedo = CreateSnowAlbedo();
+            }
+
+            if (mat.HasProperty("_BaseMap"))
+            {
+                mat.SetTexture("_BaseMap", albedo);
+                mat.SetTextureScale("_BaseMap", new Vector2(SnowTileScale, SnowTileScale));
+            }
+            else if (mat.HasProperty("_MainTex"))
+            {
+                mat.SetTexture("_MainTex", albedo);
+                mat.SetTextureScale("_MainTex", new Vector2(SnowTileScale, SnowTileScale));
+            }
+
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", Color.white);
+            else
+                mat.color = Color.white;
+
+            mat.renderQueue = (int)RenderQueue.Geometry + 1;
+            mat.SetInt("_Cull", (int)CullMode.Off);
+            mat.doubleSidedGI = true;
+            return mat;
+        }
+
+        static Texture2D CreateSnowAlbedo()
+        {
+            var tex = new Texture2D(TextureSize, TextureSize, TextureFormat.RGBA32, true, false)
+            {
+                wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Bilinear,
+                name = "QuarrySnowAlbedo"
+            };
+
+            var pixels = new Color[TextureSize * TextureSize];
+            for (int y = 0; y < TextureSize; y++)
+            {
+                for (int x = 0; x < TextureSize; x++)
+                {
+                    float u = x / (float)TextureSize;
+                    float v = y / (float)TextureSize;
+                    float sparkle = Mathf.PerlinNoise(u * 24f + 44.2f, v * 24f + 19.7f);
+                    float shade = 0.992f + sparkle * 0.008f;
+                    pixels[y * TextureSize + x] = new Color(shade, shade, shade + 0.008f, 1f);
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply(true, true);
+            return tex;
+        }
+
+        public static Material GetSandMaterial()
+        {
+            if (sandMaterial != null)
+                return sandMaterial;
+
+            ColorUtility.TryParseHtmlString("#c8b48a", out var color);
+            sandMaterial = CreateStoneMaterial(
+                color,
+                smoothness: 0.04f,
+                seed: 318.7f,
+                tileScale: 4.5f,
+                shadeMin: 0.82f,
+                shadeMax: 1.08f,
+                crackStrength: 0.05f);
+            sandMaterial.name = "LakeSand";
+            return sandMaterial;
+        }
+
+        public static Material GetWaterMaterial()
+        {
+            if (waterMaterial != null)
+                return waterMaterial;
+
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            waterMaterial = shader != null ? new Material(shader) : PrimitiveFactory.CreateColorMaterial(Color.cyan);
+            waterMaterial.name = "LakeWater";
+            waterMaterial.SetFloat("_Surface", 1f);
+            waterMaterial.SetFloat("_Blend", 0f);
+            waterMaterial.SetFloat("_Smoothness", 0.85f);
+            waterMaterial.SetColor("_BaseColor", new Color(0.12f, 0.38f, 0.62f, 0.72f));
+            waterMaterial.renderQueue = (int)RenderQueue.Transparent;
+            waterMaterial.SetOverrideTag("RenderType", "Transparent");
+            waterMaterial.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            waterMaterial.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            waterMaterial.SetInt("_ZWrite", 0);
+            waterMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            waterMaterial.EnableKeyword("_ALPHABLEND_ON");
+            waterMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            return waterMaterial;
         }
 
         public static Material GetVistaCanopyMaterial()

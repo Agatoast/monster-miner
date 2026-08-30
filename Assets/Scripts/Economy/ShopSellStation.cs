@@ -1,6 +1,7 @@
 ﻿using MonsterMiner.Core;
 using MonsterMiner.Data;
 using MonsterMiner.Interaction;
+using MonsterMiner.Inventory;
 using MonsterMiner.Player;
 using MonsterMiner.UI;
 using UnityEngine;
@@ -45,12 +46,12 @@ namespace MonsterMiner.Economy
             }
 
             if (SellConfirmationDisplay.IsForStation(this))
-                return $"Sell {slot.item.displayName} for ${slot.item.sellValue}? [E] Confirm";
+                return $"Sell {slot.item.displayName} for ${GetSellValue(slot)}? [E] Confirm";
 
             if (slot.fromShopPurchase)
-                return $"Sell {slot.item.displayName} for ${slot.item.sellValue} [E]";
+                return $"Sell {slot.item.displayName} for ${GetSellValue(slot)} [E]";
 
-            return $"Sell {slot.item.displayName} to shopkeeper for ${slot.item.sellValue} [E]";
+            return $"Sell {slot.item.displayName} to shopkeeper for ${GetSellValue(slot)} [E]";
         }
 
         public bool CanInteract(GameObject interactor) => true;
@@ -87,7 +88,7 @@ namespace MonsterMiner.Economy
 
             if (slot.fromShopPurchase)
             {
-                int value = slot.item.sellValue;
+                int value = GetSellValue(slot);
                 SellConfirmationDisplay.Show(this, slot.item.displayName, value, () => CompleteSell(ctx));
                 return;
             }
@@ -101,7 +102,7 @@ namespace MonsterMiner.Economy
             if (!CanSellSelectedSlot(slot))
                 return;
 
-            int value = slot.item.sellValue;
+            int value = GetSellValue(slot);
             bool isKey = slot.item.itemId == "cave_key";
             bool isPebble = slot.item.itemId == "shiny_pebble";
             ctx.Wallet.Add(value);
@@ -118,9 +119,11 @@ namespace MonsterMiner.Economy
                 ctx.Hud?.ShowMessage($"Sold for ${value}");
         }
 
-        static bool CanSellSelectedSlot(Inventory.InventorySlot slot)
+        static bool CanSellSelectedSlot(InventorySlot slot)
         {
             return slot != null && !slot.IsEmpty && slot.item.canBeSold;
         }
+
+        static int GetSellValue(InventorySlot slot) => InventorySystem.GetShopSellBackValue(slot);
     }
 }

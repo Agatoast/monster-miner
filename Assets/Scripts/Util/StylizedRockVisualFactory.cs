@@ -31,6 +31,8 @@ namespace MonsterMiner.Util
             StripImportedColliders(rock);
             ScaleToWidth(rock, targetWidth);
             FloorAnchor.PlaceOnFloor(rock, floorContactPoint);
+            var obstacle = rock.AddComponent<PlainsRockObstacle>();
+            obstacle.ConfigureCollider();
             return rock;
         }
 

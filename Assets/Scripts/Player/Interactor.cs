@@ -1,4 +1,5 @@
 ﻿using MonsterMiner.Interaction;
+using MonsterMiner.Util;
 using UnityEngine;
 
 namespace MonsterMiner.Player
@@ -47,13 +48,10 @@ namespace MonsterMiner.Player
                     float px = zoneLeft + (x + 0.5f) * step;
                     float py = zoneBottom + (y + 0.5f) * step;
                     var ray = viewCamera.ScreenPointToRay(new Vector3(px, py, 0f));
-                    if (!Physics.Raycast(ray, out var hit, interactRange, Physics.DefaultRaycastLayers, InteractTriggerQuery))
+                    if (!TryFindBestInteractableHit(ray, interactRange, gameObject, out var hit, out var interactable))
                         continue;
 
                     float screenDistanceSq = (px - centerX) * (px - centerX) + (py - centerY) * (py - centerY);
-                    var interactable = ResolveInteractable(hit, gameObject);
-                    if (interactable == null || !interactable.CanInteract(gameObject))
-                        continue;
 
                     if (hit.distance < bestHitDistance ||
                         (Mathf.Approximately(hit.distance, bestHitDistance) && screenDistanceSq < bestScreenDistanceSq))
@@ -99,6 +97,41 @@ namespace MonsterMiner.Player
             return null;
         }
 
+        static bool TryFindBestInteractableHit(
+            Ray ray,
+            float maxDistance,
+            GameObject interactor,
+            out RaycastHit bestHit,
+            out IInteractable interactable)
+        {
+            bestHit = default;
+            interactable = null;
+
+            var hits = Physics.RaycastAll(ray, maxDistance, Physics.DefaultRaycastLayers, InteractTriggerQuery);
+            if (hits.Length == 0)
+                return false;
+
+            float bestDistance = float.MaxValue;
+            for (int i = 0; i < hits.Length; i++)
+            {
+                if (FloorColliderUtility.IsFloorCollider(hits[i].collider))
+                    continue;
+
+                var candidate = ResolveInteractable(hits[i], interactor);
+                if (candidate == null || !candidate.CanInteract(interactor))
+                    continue;
+
+                if (hits[i].distance >= bestDistance)
+                    continue;
+
+                bestDistance = hits[i].distance;
+                bestHit = hits[i];
+                interactable = candidate;
+            }
+
+            return interactable != null;
+        }
+
         public void TryInteract()
         {
             if (CurrentTarget != null && CurrentTarget.CanInteract(gameObject))
@@ -124,10 +157,10 @@ namespace MonsterMiner.Player
                     float px = zoneLeft + (x + 0.5f) * step;
                     float py = zoneBottom + (y + 0.5f) * step;
                     var ray = viewCamera.ScreenPointToRay(new Vector3(px, py, 0f));
-                    if (!Physics.Raycast(ray, out var hit, interactRange, Physics.DefaultRaycastLayers, InteractTriggerQuery))
+                    if (!TryFindBestInteractableHit(ray, interactRange, gameObject, out _, out var interactable))
                         continue;
 
-                    if (ResolveInteractable(hit, gameObject) == target)
+                    if (interactable == target)
                         return true;
                 }
             }

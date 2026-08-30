@@ -32,7 +32,6 @@ namespace MonsterMiner.Player
             controller = GetComponent<PlayerController>();
 
             var indicatorGo = new GameObject("GrenadeAimIndicator");
-            indicatorGo.transform.SetParent(transform, false);
             aimIndicator = indicatorGo.AddComponent<GrenadeAimIndicator>();
         }
 
@@ -40,6 +39,9 @@ namespace MonsterMiner.Player
         {
             if (inventory != null)
                 inventory.OnSelectedChanged -= OnSelectedChanged;
+
+            if (aimIndicator != null)
+                Destroy(aimIndicator.gameObject);
 
             if (instance == this)
                 instance = null;
@@ -120,6 +122,9 @@ namespace MonsterMiner.Player
 
         bool HasGrenadeEquipped()
         {
+            if (GetComponent<PlayerVehicleMount>()?.IsDriving == true)
+                return false;
+
             var slot = GameContext.Instance?.Inventory?.GetSelectedSlot();
             return slot != null && !slot.IsEmpty && InventorySystem.IsGrenadeItem(slot.item);
         }

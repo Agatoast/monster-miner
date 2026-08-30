@@ -211,6 +211,46 @@ namespace MonsterMiner.World
             return false;
         }
 
+        public bool TryGetRandomClearJarlLandPoint(
+            float clearanceRadius,
+            int maxAttempts,
+            out Vector3 point,
+            float contentHorizontalRadius = 0f)
+        {
+            var center = QuarryCatalog.GetLandQuarry2Center();
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                float angle = Random.Range(0f, Mathf.PI * 2f);
+                float edge = LandQuarry2Boundary.SampleEdgeDistance(angle);
+                float minDistance = WorldScale.Feet(24f) + contentHorizontalRadius;
+                float maxDistance = edge - WorldScale.Feet(8f) - contentHorizontalRadius;
+                if (maxDistance <= minDistance)
+                    continue;
+
+                float distance = Random.Range(minDistance, maxDistance);
+                float localX = center.x + Mathf.Cos(angle) * distance;
+                float localZ = center.y + Mathf.Sin(angle) * distance;
+
+                if (!LandQuarry2Boundary.ContainsLocal(localX, localZ))
+                    continue;
+
+                if (IsInSpawnExclusionLocal(localX, localZ))
+                    continue;
+
+                if (!TryResolveFloorWorldPoint(localX, localZ, out var floorPoint))
+                    continue;
+
+                if (!IsClearForSpawn(floorPoint, clearanceRadius))
+                    continue;
+
+                point = floorPoint;
+                return true;
+            }
+
+            point = default;
+            return false;
+        }
+
         public Vector3 GetRandomEdgeFloorPoint(float insetFromWallMin, float insetFromWallMax, float contentHorizontalRadius = 0f)
         {
             for (int attempt = 0; attempt < 48; attempt++)
@@ -295,6 +335,15 @@ namespace MonsterMiner.World
 
             if (PlateauBoundary.IsOnPlateau(localX, localZ, Radius))
                 return true;
+
+            if (QuarryCatalog.IsLandQuarry2Local(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsBeachLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsOpenWaterLocal(localX, localZ))
+                return false;
 
             float angle = Mathf.Atan2(localZ, localX);
             float distance = new Vector2(localX, localZ).magnitude;
@@ -381,6 +430,8 @@ namespace MonsterMiner.World
                     return true;
                 if (name.StartsWith("PlainsGroundCollider_") || name.StartsWith("FloorCollider_")
                     || name.StartsWith("PlateauEdgeBarrier_") || name.StartsWith("CliffWall_")
+                    || name.StartsWith("Quarry2FloorCollider_")
+                    || name == "Quarry2FloorCollision" || name == "Quarry2FloorCenterCap"
                     || name.StartsWith("Tree_") || name.StartsWith("Copse_")
                     || name.StartsWith("Trunk")
                     || name.StartsWith("Foliage") || name == "PlainsBiome" || name == "TreeCopses")

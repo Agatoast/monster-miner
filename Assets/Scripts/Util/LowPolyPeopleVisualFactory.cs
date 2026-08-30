@@ -10,9 +10,37 @@ namespace MonsterMiner.Util
 
         public static GameObject CreateShopkeeper(Transform parent, Vector3 localPosition, Quaternion localRotation, float floorWorldY)
         {
-            var character = CreateCharacter(
+            return CreateShopPerson(
                 NormalManResourcePath,
                 "Shopkeeper",
+                parent,
+                localPosition,
+                localRotation,
+                floorWorldY);
+        }
+
+        public static GameObject CreateShopAssistant(Transform parent, Vector3 localPosition, Quaternion localRotation, float floorWorldY)
+        {
+            return CreateShopPerson(
+                StrongManResourcePath,
+                "JarlAssistant",
+                parent,
+                localPosition,
+                localRotation,
+                floorWorldY);
+        }
+
+        static GameObject CreateShopPerson(
+            string resourcePath,
+            string objectName,
+            Transform parent,
+            Vector3 localPosition,
+            Quaternion localRotation,
+            float floorWorldY)
+        {
+            var character = CreateCharacter(
+                resourcePath,
+                objectName,
                 parent,
                 localPosition,
                 localRotation,

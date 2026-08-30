@@ -42,6 +42,7 @@ namespace MonsterMiner.Player
         bool holdingRifle;
         bool holdingMachineGun;
         bool holdingLeftHandItem;
+        bool drivingPoseActive;
 
         bool HoldingThrustWeapon => holdingKnife || holdingSpear;
 
@@ -99,6 +100,18 @@ namespace MonsterMiner.Player
 
         void LateUpdate()
         {
+            if (IsDrivingCab())
+            {
+                ApplyDrivingPose();
+                return;
+            }
+
+            if (drivingPoseActive)
+            {
+                EndDrivingPose();
+                return;
+            }
+
             if (heldVisual == null || hands == null || !hands.HasMesh || controller?.ViewCamera == null)
                 return;
 
@@ -347,6 +360,9 @@ namespace MonsterMiner.Player
 
         public void TriggerSwing()
         {
+            if (IsDrivingCab())
+                return;
+
             swinging = true;
             swingTimer = 0f;
             if (HoldingThrustWeapon)
@@ -361,6 +377,53 @@ namespace MonsterMiner.Player
             var gloves = GameContext.Instance?.Inventory?.EquippedGloves;
             if (gloves != null)
                 hands.SetGloveColor(gloves.worldColor);
+        }
+
+        bool IsDrivingCab()
+        {
+            var mount = controller != null
+                ? controller.GetComponent<PlayerVehicleMount>()
+                : GetComponent<PlayerVehicleMount>();
+            return mount != null && mount.IsDriving;
+        }
+
+        void ApplyDrivingPose()
+        {
+            HideHeldItemForDriving();
+            hands?.SetVisible(false);
+            drivingPoseActive = true;
+        }
+
+        void EndDrivingPose()
+        {
+            hands?.SetVisible(true);
+            drivingPoseActive = false;
+            RefreshHeldItem();
+        }
+
+        void HideHeldItemForDriving()
+        {
+            if (heldVisual != null)
+            {
+                Destroy(heldVisual.gameObject);
+                heldVisual = null;
+            }
+
+            if (swinging && hands != null && hands.HasMesh && HoldingThrustWeapon)
+            {
+                swinging = false;
+                hands.EndKnifeStab();
+            }
+
+            swinging = false;
+            holdingPickaxe = false;
+            holdingKnife = false;
+            holdingPistol = false;
+            holdingSpear = false;
+            holdingShotgun = false;
+            holdingRifle = false;
+            holdingMachineGun = false;
+            holdingLeftHandItem = false;
         }
 
         void RefreshHeldItem()
@@ -383,6 +446,9 @@ namespace MonsterMiner.Player
             holdingMachineGun = false;
             holdingLeftHandItem = false;
             heldItemAnchor = hands != null && hands.HasMesh ? hands.RightHandAnchor : heldItemAnchor;
+
+            if (IsDrivingCab())
+                return;
 
             var ctx = GameContext.Instance;
             if (ctx?.Inventory == null || controller?.ViewCamera == null || heldItemAnchor == null)

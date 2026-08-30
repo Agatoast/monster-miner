@@ -10,6 +10,13 @@ namespace MonsterMiner.Util
             if (bounds == null)
                 return 0f;
 
+            if (QuarryCatalog.IsLandQuarry2Local(localX, localZ))
+            {
+                float plainsBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+                float snowLocalY = LandQuarry2Boundary.SampleSnowFloorLocalY(localX, localZ, plainsBase);
+                return bounds.transform.TransformPoint(new Vector3(localX, snowLocalY, localZ)).y;
+            }
+
             if (PlateauBoundary.IsOnPlateau(localX, localZ, bounds.Radius))
                 return bounds.SamplePlateauFloorWorldY(localX, localZ);
 

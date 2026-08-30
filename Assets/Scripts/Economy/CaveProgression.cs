@@ -63,9 +63,6 @@ namespace MonsterMiner.Economy
 
         public void UnlockLandQuarry2()
         {
-            if (HasLandQuarry2)
-                return;
-
             HasLandQuarry2 = true;
             var builder = FindFirstObjectByType<CavernBuilder>();
             builder?.BuildLandQuarry2(GameContext.Instance?.CavernBounds);

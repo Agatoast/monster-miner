@@ -15,8 +15,10 @@ namespace MonsterMiner.World
         const float RockSpacingMaxFeet = 800f;
 
         const int EggSeed = 91337;
+        const int CreatureSeed = 62418;
         const int TreeSeed = 42857;
         const int RockSeed = 43128;
+        const float CreatureGridOffsetFeet = 180f;
 
         public static float ChunkSize => WorldScale.Feet(ChunkSizeFeet);
 
@@ -95,6 +97,57 @@ namespace MonsterMiner.World
                     EggSpacingMinFeet,
                     EggSpacingMaxFeet,
                     Hash01(Mathf.FloorToInt(x / size), chunkZ, EggSeed + 19)));
+            }
+        }
+
+        public static void ForEachCreatureInChunk(int chunkX, int chunkZ, CavernBounds bounds, Action<float, float> visit)
+        {
+            if (bounds == null || visit == null)
+                return;
+
+            float size = ChunkSize;
+            float offset = WorldScale.Feet(CreatureGridOffsetFeet);
+            float minX = chunkX * size + offset;
+            float minZ = chunkZ * size + offset;
+            float maxX = chunkX * size + size;
+            float maxZ = chunkZ * size + size;
+            float outer = WorldRegion.GetLandOuterRadius(bounds.Radius);
+
+            float x = minX;
+            while (x < maxX)
+            {
+                float z = minZ;
+                while (z < maxZ)
+                {
+                    float spacing = WorldScale.Feet(Mathf.Lerp(
+                        EggSpacingMinFeet,
+                        EggSpacingMaxFeet,
+                        Hash01(Mathf.FloorToInt(x / size), Mathf.FloorToInt(z / size), CreatureSeed + 11)));
+
+                    float localX = x + spacing * Hash01(
+                        Mathf.FloorToInt(x * 10f),
+                        Mathf.FloorToInt(z * 10f),
+                        CreatureSeed + 3);
+                    float localZ = z + spacing * Hash01(
+                        Mathf.FloorToInt(x * 10f),
+                        Mathf.FloorToInt(z * 10f),
+                        CreatureSeed + 7);
+
+                    if (localX >= minX && localX < maxX
+                        && localZ >= minZ && localZ < maxZ
+                        && localX * localX + localZ * localZ <= outer * outer
+                        && WorldRegion.IsLandLocal(bounds, localX, localZ))
+                    {
+                        visit(localX, localZ);
+                    }
+
+                    z += spacing;
+                }
+
+                x += WorldScale.Feet(Mathf.Lerp(
+                    EggSpacingMinFeet,
+                    EggSpacingMaxFeet,
+                    Hash01(Mathf.FloorToInt(x / size), chunkZ, CreatureSeed + 19)));
             }
         }
 

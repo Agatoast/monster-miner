@@ -9,9 +9,14 @@ namespace MonsterMiner.Util
     public static class IndustrialSmallTruckVisualFactory
     {
         const string ResourcePath = "Models/Vehicles/industrial_small_truck";
-        static readonly Vector3 SeatLocalPosition = new Vector3(-0.42f, 1.28f, 0.72f);
+        // Driver eye point: inside the cab, left seat, looking out the windshield.
+        static readonly Vector3 SeatLocalPosition = new Vector3(
+            -0.28f,
+            WorldScale.Feet(7.4f),
+            WorldScale.Feet(4.1f));
         static readonly Vector3 SeatLocalEuler = new Vector3(0f, 0f, 0f);
-        static readonly Vector3 CargoBedLocalPosition = new Vector3(0f, 1.05f, -1.65f);
+        static readonly Vector3 CargoBedLocalPosition = new Vector3(0f, 1.08f, -1.55f);
+        static readonly Vector3 CargoBedColliderSize = new Vector3(2.05f, 0.15f, 2.35f);
         static readonly Vector3 CabTriggerCenter = new Vector3(-0.35f, 1.05f, 1.05f);
         static readonly Vector3 CabTriggerSize = new Vector3(1.35f, 1.4f, 1.8f);
         static readonly Vector3 BedTriggerCenter = new Vector3(0f, 1.2f, -1.55f);
@@ -49,6 +54,11 @@ namespace MonsterMiner.Util
             cargoBed.localPosition = CargoBedLocalPosition;
             cargoBed.localRotation = Quaternion.identity;
 
+            var bedFloor = cargoBed.gameObject.AddComponent<BoxCollider>();
+            bedFloor.isTrigger = false;
+            bedFloor.size = CargoBedColliderSize;
+            bedFloor.center = new Vector3(0f, CargoBedColliderSize.y * 0.5f, 0f);
+
             ConfigurePhysics(truckRoot, body != null ? body.gameObject : truckRoot);
             AddInteractTrigger<TruckCabInteract>(truckRoot.transform, CabTriggerCenter, CabTriggerSize);
             AddInteractTrigger<TruckBedInteract>(truckRoot.transform, BedTriggerCenter, BedTriggerSize);
@@ -57,6 +67,7 @@ namespace MonsterMiner.Util
             if (driveable == null)
                 driveable = truckRoot.AddComponent<DriveableTruck>();
             driveable.Initialize(seat, cargoBed);
+            truckRoot.AddComponent<LakeTraversalGuard>();
 
             var cabInteract = truckRoot.GetComponentInChildren<TruckCabInteract>();
             cabInteract?.Initialize(driveable);
