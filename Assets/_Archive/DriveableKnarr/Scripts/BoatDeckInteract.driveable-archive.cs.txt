@@ -1,0 +1,68 @@
+using MonsterMiner.Core;
+using MonsterMiner.Interaction;
+using UnityEngine;
+
+namespace MonsterMiner.Player
+{
+    public class BoatDeckInteract : MonoBehaviour, IInteractable
+    {
+        DriveableBoat boat;
+
+        public void Initialize(DriveableBoat owner)
+        {
+            boat = owner;
+        }
+
+        public string GetPrompt()
+        {
+            if (boat == null)
+                return string.Empty;
+
+            var mount = GameContext.Instance?.Player?.GetComponent<PlayerVehicleMount>();
+            if (mount != null && mount.IsInBoatCargo && mount.CurrentBoat == boat)
+                return "Get off ship [E]";
+
+            return "Get on ship [E]";
+        }
+
+        public bool CanInteract(GameObject interactor)
+        {
+            if (boat == null || interactor == null)
+                return false;
+
+            var mount = interactor.GetComponent<PlayerVehicleMount>();
+            if (mount == null)
+                return false;
+
+            if (interactor.GetComponent<PlayerWingsFlight>()?.IsFlying == true)
+                return false;
+
+            if (mount.IsInBoatCargo)
+                return mount.CurrentBoat == boat;
+
+            if (mount.IsDrivingBoat || mount.IsDriving)
+                return false;
+
+            return !boat.HasCargoOccupant;
+        }
+
+        public void Interact(GameObject interactor)
+        {
+            if (boat == null)
+                return;
+
+            var mount = interactor.GetComponent<PlayerVehicleMount>();
+            if (mount == null)
+                return;
+
+            if (mount.IsInBoatCargo && mount.CurrentBoat == boat)
+            {
+                mount.TryDismount();
+                return;
+            }
+
+            if (!boat.HasCargoOccupant)
+                mount.TryMountBoatCargo(boat);
+        }
+    }
+}

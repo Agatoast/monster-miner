@@ -38,6 +38,9 @@ namespace MonsterMiner.World
             if (LakeCatalog.IsLakeLocal(localX, localZ) || LakeCatalog.IsBeachLocal(localX, localZ))
                 return false;
 
+            if (LandQuarry2Boundary.IsSnowGroundLocal(localX, localZ))
+                return false;
+
             float angle = Mathf.Atan2(localZ, localX);
             float distance = new Vector2(localX, localZ).magnitude;
             return distance >= GetLandInnerRadius(angle, bounds.Radius)

@@ -43,8 +43,22 @@ namespace MonsterMiner.Player
         bool holdingMachineGun;
         bool holdingLeftHandItem;
         bool drivingPoseActive;
+        bool boatSailViewActive;
 
         bool HoldingThrustWeapon => holdingKnife || holdingSpear;
+
+        public void EnterBoatSailView()
+        {
+            boatSailViewActive = true;
+            ApplyDrivingPose();
+        }
+
+        public void ExitBoatSailView()
+        {
+            boatSailViewActive = false;
+            if (!IsDrivingCab())
+                EndDrivingPose();
+        }
 
         public Transform LeftHandAnchor => hands?.LeftHandAnchor;
 
@@ -100,7 +114,7 @@ namespace MonsterMiner.Player
 
         void LateUpdate()
         {
-            if (IsDrivingCab())
+            if (IsDrivingCab() || boatSailViewActive)
             {
                 ApplyDrivingPose();
                 return;
@@ -384,7 +398,7 @@ namespace MonsterMiner.Player
             var mount = controller != null
                 ? controller.GetComponent<PlayerVehicleMount>()
                 : GetComponent<PlayerVehicleMount>();
-            return mount != null && mount.IsDriving;
+            return mount != null && (mount.IsDriving || mount.IsDrivingBoat);
         }
 
         void ApplyDrivingPose()
@@ -447,7 +461,7 @@ namespace MonsterMiner.Player
             holdingLeftHandItem = false;
             heldItemAnchor = hands != null && hands.HasMesh ? hands.RightHandAnchor : heldItemAnchor;
 
-            if (IsDrivingCab())
+            if (IsDrivingCab() || boatSailViewActive)
                 return;
 
             var ctx = GameContext.Instance;

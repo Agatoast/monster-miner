@@ -5,7 +5,12 @@ namespace MonsterMiner.World
 {
     public static class LandQuarry2FloorBuilder
     {
-        public static GameObject CreateFloor(Transform parent, float floorLocalY, Material material)
+        public static GameObject CreateFloor(
+            Transform parent,
+            Vector2 jarlCenterContent,
+            float plainsBaseLocalY,
+            float groundLocalYAtCenter,
+            Material material)
         {
             const int radialSegments = 72;
             const int ringCount = 12;
@@ -13,7 +18,12 @@ namespace MonsterMiner.World
             var floorGo = new GameObject("Quarry2Floor");
             floorGo.transform.SetParent(parent, false);
 
-            var mesh = BuildFloorMesh(floorLocalY, radialSegments, ringCount);
+            var mesh = BuildFloorMesh(
+                jarlCenterContent,
+                plainsBaseLocalY,
+                groundLocalYAtCenter,
+                radialSegments,
+                ringCount);
             var meshFilter = floorGo.AddComponent<MeshFilter>();
             meshFilter.sharedMesh = mesh;
 
@@ -23,6 +33,100 @@ namespace MonsterMiner.World
             meshRenderer.receiveShadows = false;
 
             return floorGo;
+        }
+
+        public static GameObject CreateSnowApron(
+            Transform parent,
+            Vector2 jarlCenterContent,
+            float plainsBaseLocalY,
+            float groundLocalYAtCenter,
+            Material material)
+        {
+            const float cellSizeFeet = 48f;
+            float cellSize = WorldScale.Feet(cellSizeFeet);
+            var lakeCenter = LakeCatalog.GetCenterLocal();
+            float lakeRadius = LakeCatalog.GetNominalRadiusUnits();
+            float minX = lakeCenter.x - lakeRadius;
+            float maxX = lakeCenter.x + lakeRadius;
+            float minZ = jarlCenterContent.y - LandQuarry2Boundary.MaxEdgeDistance;
+            float maxZ = lakeCenter.y;
+
+            var vertices = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var triangles = new List<int>();
+            float uvScale = lakeRadius * 2.2f;
+
+            for (float contentX = minX; contentX <= maxX; contentX += cellSize)
+            {
+                float shoreZ = LandQuarry2Boundary.SampleLakeSouthShoreLocalZ(contentX);
+                for (float contentZ = minZ; contentZ <= Mathf.Min(maxZ, shoreZ); contentZ += cellSize)
+                {
+                    float centerX = contentX + cellSize * 0.5f;
+                    float centerZ = contentZ + cellSize * 0.5f;
+                    if (!LandQuarry2Boundary.IsSnowGroundLocal(centerX, centerZ))
+                        continue;
+
+                    if (LandQuarry2Boundary.ContainsLocal(centerX, centerZ))
+                        continue;
+
+                    float localX = centerX - jarlCenterContent.x;
+                    float localZ = centerZ - jarlCenterContent.y;
+                    float half = cellSize * 0.53f;
+                    int baseIndex = vertices.Count;
+
+                    float y00 = SampleFloorLocalY(contentX - half, contentZ - half, jarlCenterContent, plainsBaseLocalY, groundLocalYAtCenter);
+                    float y10 = SampleFloorLocalY(contentX + half, contentZ - half, jarlCenterContent, plainsBaseLocalY, groundLocalYAtCenter);
+                    float y11 = SampleFloorLocalY(contentX + half, contentZ + half, jarlCenterContent, plainsBaseLocalY, groundLocalYAtCenter);
+                    float y01 = SampleFloorLocalY(contentX - half, contentZ + half, jarlCenterContent, plainsBaseLocalY, groundLocalYAtCenter);
+
+                    vertices.Add(new Vector3(localX - half, y00, localZ - half));
+                    vertices.Add(new Vector3(localX + half, y10, localZ - half));
+                    vertices.Add(new Vector3(localX + half, y11, localZ + half));
+                    vertices.Add(new Vector3(localX - half, y01, localZ + half));
+
+                    uvs.Add(new Vector2((centerX - half - lakeCenter.x) / uvScale + 0.5f, (centerZ - half - lakeCenter.y) / uvScale + 0.5f));
+                    uvs.Add(new Vector2((centerX + half - lakeCenter.x) / uvScale + 0.5f, (centerZ - half - lakeCenter.y) / uvScale + 0.5f));
+                    uvs.Add(new Vector2((centerX + half - lakeCenter.x) / uvScale + 0.5f, (centerZ + half - lakeCenter.y) / uvScale + 0.5f));
+                    uvs.Add(new Vector2((centerX - half - lakeCenter.x) / uvScale + 0.5f, (centerZ + half - lakeCenter.y) / uvScale + 0.5f));
+
+                    triangles.Add(baseIndex);
+                    triangles.Add(baseIndex + 2);
+                    triangles.Add(baseIndex + 1);
+                    triangles.Add(baseIndex);
+                    triangles.Add(baseIndex + 3);
+                    triangles.Add(baseIndex + 2);
+                }
+            }
+
+            if (vertices.Count == 0)
+                return null;
+
+            var apronGo = new GameObject("Quarry2SnowApron");
+            apronGo.transform.SetParent(parent, false);
+
+            var mesh = new Mesh { name = "LandQuarry2SnowApron" };
+            mesh.SetVertices(vertices);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            var meshFilter = apronGo.AddComponent<MeshFilter>();
+            meshFilter.sharedMesh = mesh;
+
+            var meshRenderer = apronGo.AddComponent<MeshRenderer>();
+            meshRenderer.sharedMaterial = material;
+            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            meshRenderer.receiveShadows = false;
+
+            var collisionGo = new GameObject("Quarry2SnowApronCollision");
+            collisionGo.transform.SetParent(apronGo.transform, false);
+            var collisionFilter = collisionGo.AddComponent<MeshFilter>();
+            collisionFilter.sharedMesh = mesh;
+            var meshCollider = collisionGo.AddComponent<MeshCollider>();
+            meshCollider.sharedMesh = mesh;
+
+            return apronGo;
         }
 
         public static void CreateFloorCollision(Transform parent, float floorLocalY)
@@ -66,14 +170,31 @@ namespace MonsterMiner.World
             }
         }
 
-        static Mesh BuildFloorMesh(float floorLocalY, int radialSegments, int ringCount)
+        static float SampleFloorLocalY(
+            float contentX,
+            float contentZ,
+            Vector2 jarlCenterContent,
+            float plainsBaseLocalY,
+            float groundLocalYAtCenter)
+        {
+            float contentGroundY = LandQuarry2Boundary.SampleSnowFloorLocalY(contentX, contentZ, plainsBaseLocalY);
+            return contentGroundY - groundLocalYAtCenter;
+        }
+
+        static Mesh BuildFloorMesh(
+            Vector2 jarlCenterContent,
+            float plainsBaseLocalY,
+            float groundLocalYAtCenter,
+            int radialSegments,
+            int ringCount)
         {
             var vertices = new List<Vector3>();
             var uvs = new List<Vector2>();
             var triangles = new List<int>();
             float uvScale = LandQuarry2Boundary.MaxEdgeDistance * 2.2f;
 
-            vertices.Add(new Vector3(0f, floorLocalY, 0f));
+            float centerY = SampleFloorLocalY(jarlCenterContent.x, jarlCenterContent.y, jarlCenterContent, plainsBaseLocalY, groundLocalYAtCenter);
+            vertices.Add(new Vector3(0f, centerY, 0f));
             uvs.Add(new Vector2(0.5f, 0.5f));
             const int centerIndex = 0;
 
@@ -87,7 +208,10 @@ namespace MonsterMiner.World
                     float ringRadius = edgeRadius * (ring + 1f) / totalRings;
                     float x = Mathf.Cos(angle) * ringRadius;
                     float z = Mathf.Sin(angle) * ringRadius;
-                    vertices.Add(new Vector3(x, floorLocalY, z));
+                    float contentX = jarlCenterContent.x + x;
+                    float contentZ = jarlCenterContent.y + z;
+                    float y = SampleFloorLocalY(contentX, contentZ, jarlCenterContent, plainsBaseLocalY, groundLocalYAtCenter);
+                    vertices.Add(new Vector3(x, y, z));
                     uvs.Add(new Vector2(x / uvScale + 0.5f, z / uvScale + 0.5f));
                 }
             }

@@ -16,6 +16,8 @@ namespace MonsterMiner.World
         public const float VikingCharacterShiftNorthFeet = 85f;
         public const float LandQuarry2PlayerSpawnShiftNorthFeet = 90f;
         public const float LandQuarry2ShopWestOfSpawnFeet = 20f;
+        public const float LandQuarry2BeachApproachSpawnSouthOfSandFeet = 32f;
+        public const float LandQuarry2BeachApproachSpawnWestOfBeachCenterFeet = 12f;
         public const string JarlLandDisplayName = "Jarl Land";
 
         public const int PlateauQuarryIndex = 1;
@@ -117,20 +119,24 @@ namespace MonsterMiner.World
             if (bounds == null)
                 return Vector3.zero;
 
-            var quarry = FindQuarry2Root(bounds);
-            if (quarry == null)
-                return Vector3.zero;
+            if (PlayerSpawnPersistence.HasSavedLandSpawn)
+                return PlayerSpawnPersistence.LoadSavedLandSpawn();
 
-            var hall = FindQuarry2Hall(bounds);
-            Vector3 spawnLocal = ResolveBesideHallLocal(
-                hall != null ? hall.gameObject : null,
-                quarry,
-                LandQuarry2PlayerSpawnShiftNorthFeet);
-            Vector3 worldPoint = quarry.TransformPoint(spawnLocal);
+            Vector3 contentLocal = ResolveBeachApproachSpawnContentLocal();
+            Vector3 worldPoint = bounds.transform.TransformPoint(contentLocal);
             return PlainsGroundSupport.SnapWorldPointToPlains(
                 bounds,
                 worldPoint,
                 WorldScale.CharacterHeightUnits * 0.5f);
+        }
+
+        public static Vector3 ResolveBeachApproachSpawnContentLocal()
+        {
+            var beachCenter = LakeCatalog.GetBeachCenterContentLocal();
+            return new Vector3(
+                beachCenter.x - WorldScale.Feet(LandQuarry2BeachApproachSpawnWestOfBeachCenterFeet),
+                0f,
+                LakeCatalog.GetBeachSouthEdgeZ() - WorldScale.Feet(LandQuarry2BeachApproachSpawnSouthOfSandFeet));
         }
 
         public static Vector3 ResolveVikingCharacterSpawnWorld(CavernBounds bounds)

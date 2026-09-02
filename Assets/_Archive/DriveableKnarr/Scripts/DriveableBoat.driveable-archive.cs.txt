@@ -1,0 +1,552 @@
+using System.Collections.Generic;
+using MonsterMiner.Core;
+using MonsterMiner.World;
+using UnityEngine;
+
+namespace MonsterMiner.Player
+{
+    [RequireComponent(typeof(Rigidbody))]
+    public class DriveableBoat : MonoBehaviour, ICargoVehicle
+    {
+        const float MaxForwardSpeedMph = 25f;
+        const float MaxReverseSpeedMph = 5f;
+        const float SpeedChangeMphPerSecond = 1f;
+        const float MinForwardSteerSpeedMph = 1f;
+        const float TurnSpeedDegreesPerSecond = 5f;
+        const float DismountSpeedThreshold = 1.25f;
+        const float DeckBoundaryInsetFeet = 1.1f;
+
+        Transform deck;
+        Transform helm;
+        Rigidbody rb;
+        PlayerVehicleMount driver;
+        PlayerVehicleMount cargoOccupant;
+        Vector3 cargoHalfExtents = new Vector3(2.4f, 0.2f, 5.5f);
+        float cargoDeckTopLocalY;
+        Vector3 cargoEntryLocalPosition;
+        float waterVerticalOffsetFeet;
+        float bottomOffset = 0.5f;
+        Vector3 hullSampleCenterLocal;
+        Vector3 hullHalfExtentsLocal = new Vector3(2.8f, 1.2f, 7f);
+        Vector3 bowLocalDirection = Vector3.right;
+        Vector3 beamLocalDirection = Vector3.forward;
+        float hullHalfLengthLocal;
+        float hullHalfBeamLocal;
+        float sternPivotDistanceFromHullCenter;
+        Vector3 lastValidPosition;
+        Quaternion lastValidRotation;
+        bool hasLastValidPose;
+        float signedSpeedMph;
+        Vector2[] deckBoundaryCargoLocal;
+
+        Renderer[] bodyRenderers;
+        HashSet<Renderer> hullVisibilityHidden;
+        bool driverViewHidden;
+
+        public Transform CargoBed => deck;
+        public Transform HostTransform => transform;
+        public Transform Helm => helm;
+        public Vector3 CargoEntryLocalPosition => cargoEntryLocalPosition;
+        public bool HasDriver => driver != null;
+        public bool HasCargoOccupant => cargoOccupant != null;
+        public bool CanDismount => !HasDriver || CurrentSpeedMagnitude <= DismountSpeedThreshold;
+
+        public Vector3 BowForwardWorld => GetBowForwardWorld(transform.rotation);
+
+        float CurrentSpeedMagnitude
+        {
+            get
+            {
+                if (!HasDriver)
+                    return rb != null ? rb.linearVelocity.magnitude : 0f;
+
+                return WorldScale.MilesPerHour(Mathf.Abs(signedSpeedMph));
+            }
+        }
+
+        public float DisplaySpeedMph => HasDriver ? Mathf.Abs(signedSpeedMph) : GetPassiveSpeedMph();
+
+        float GetPassiveSpeedMph()
+        {
+            if (rb == null)
+                return 0f;
+
+            float forwardUnits = Vector3.Dot(rb.linearVelocity, GetBowForwardWorld());
+            float oneMph = WorldScale.MilesPerHour(1f);
+            if (oneMph <= 0.0001f)
+                return 0f;
+
+            return Mathf.Abs(forwardUnits / oneMph);
+        }
+
+        public void Initialize(
+            Transform boatDeck,
+            Transform helmSeat,
+            Vector3 deckHalfExtents,
+            float verticalOffsetFeet,
+            Vector3 bowLocalDir,
+            float sternPivotDistanceFromCenter,
+            IList<Vector2> deckBoundaryCargoLocalXZ = null,
+            Vector3? cargoEntryLocal = null)
+        {
+            deck = boatDeck;
+            helm = helmSeat;
+            cargoHalfExtents = deckHalfExtents;
+            deckBoundaryCargoLocal = CopyDeckBoundary(deckBoundaryCargoLocalXZ);
+            waterVerticalOffsetFeet = verticalOffsetFeet;
+            bowLocalDirection = bowLocalDir.sqrMagnitude > 0.0001f ? bowLocalDir.normalized : Vector3.right;
+            beamLocalDirection = Vector3.Cross(Vector3.up, bowLocalDirection).normalized;
+            if (beamLocalDirection.sqrMagnitude < 0.0001f)
+                beamLocalDirection = Vector3.forward;
+            sternPivotDistanceFromHullCenter = sternPivotDistanceFromCenter;
+            CacheCargoDeckTopLocalY();
+            float defaultStandY = cargoDeckTopLocalY + WorldScale.CharacterHeightUnits * 0.5f;
+            cargoEntryLocalPosition = cargoEntryLocal ?? new Vector3(0f, defaultStandY, 0f);
+
+            rb = GetComponent<Rigidbody>();
+            rb.isKinematic = false;
+            rb.useGravity = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+            CacheBottomOffset();
+            CacheHullHalfExtentsLocal();
+            PreserveSpawnPose(transform.position, transform.rotation);
+            rb.WakeUp();
+        }
+
+        public void PreserveSpawnPose(Vector3 worldPosition, Quaternion worldRotation)
+        {
+            lastValidPosition = worldPosition;
+            lastValidRotation = worldRotation;
+            hasLastValidPose = true;
+            rb.position = worldPosition;
+            rb.rotation = worldRotation;
+            transform.SetPositionAndRotation(worldPosition, worldRotation);
+            Physics.SyncTransforms();
+        }
+
+        public bool IsForwardHalfLocalPoint(Vector3 localPoint)
+        {
+            Vector3 fromCenter = localPoint - hullSampleCenterLocal;
+            return Vector3.Dot(fromCenter, bowLocalDirection) >= 0f;
+        }
+
+        public Vector3 ClampCargoLocalPosition(Vector3 localPosition)
+        {
+            localPosition.y = CargoEntryLocalPosition.y;
+
+            if (deckBoundaryCargoLocal == null || deckBoundaryCargoLocal.Length < 3)
+            {
+                localPosition.x = Mathf.Clamp(localPosition.x, -cargoHalfExtents.x, cargoHalfExtents.x);
+                localPosition.z = Mathf.Clamp(localPosition.z, -cargoHalfExtents.z, cargoHalfExtents.z);
+                return localPosition;
+            }
+
+            float inset = WorldScale.Feet(DeckBoundaryInsetFeet);
+            if (deck != null)
+            {
+                float scale = Mathf.Max(deck.lossyScale.x, 0.0001f);
+                inset /= scale;
+            }
+
+            Vector2 clamped = ClampPointToDeckBoundary(
+                new Vector2(localPosition.x, localPosition.z),
+                deckBoundaryCargoLocal,
+                inset);
+            localPosition.x = clamped.x;
+            localPosition.z = clamped.y;
+            return localPosition;
+        }
+
+        static Vector2[] CopyDeckBoundary(IList<Vector2> source)
+        {
+            if (source == null || source.Count < 3)
+                return null;
+
+            var copy = new Vector2[source.Count];
+            for (int i = 0; i < source.Count; i++)
+                copy[i] = source[i];
+
+            return copy;
+        }
+
+        static Vector2 ClampPointToDeckBoundary(Vector2 point, IReadOnlyList<Vector2> polygon, float inset)
+        {
+            if (IsPointInPolygon(point, polygon))
+                return point;
+
+            Vector2 onEdge = ClosestPointOnPolygonBoundary(point, polygon);
+            Vector2 centroid = GetPolygonCentroid(polygon);
+            Vector2 inward = centroid - onEdge;
+            if (inward.sqrMagnitude < 0.000001f)
+                return onEdge;
+
+            inward.Normalize();
+            for (float step = inset; step >= inset * 0.1f; step -= inset * 0.1f)
+            {
+                Vector2 candidate = onEdge + inward * step;
+                if (IsPointInPolygon(candidate, polygon))
+                    return candidate;
+            }
+
+            return onEdge;
+        }
+
+        static Vector2 ClosestPointOnPolygonBoundary(Vector2 point, IReadOnlyList<Vector2> polygon)
+        {
+            Vector2 best = polygon[0];
+            float bestDistSq = float.PositiveInfinity;
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                Vector2 closest = ClosestPointOnSegment(point, polygon[j], polygon[i]);
+                float distSq = (closest - point).sqrMagnitude;
+                if (distSq >= bestDistSq)
+                    continue;
+
+                bestDistSq = distSq;
+                best = closest;
+            }
+
+            return best;
+        }
+
+        static Vector2 ClosestPointOnSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float lengthSq = ab.sqrMagnitude;
+            if (lengthSq < 0.000001f)
+                return a;
+
+            float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / lengthSq);
+            return a + ab * t;
+        }
+
+        static Vector2 GetPolygonCentroid(IReadOnlyList<Vector2> polygon)
+        {
+            Vector2 sum = Vector2.zero;
+            for (int i = 0; i < polygon.Count; i++)
+                sum += polygon[i];
+
+            return sum / polygon.Count;
+        }
+
+        static bool IsPointInPolygon(Vector2 point, IReadOnlyList<Vector2> polygon)
+        {
+            bool inside = false;
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                Vector2 a = polygon[i];
+                Vector2 b = polygon[j];
+                bool intersects = (a.y > point.y) != (b.y > point.y)
+                    && point.x < (b.x - a.x) * (point.y - a.y) / ((b.y - a.y) + 0.000001f) + a.x;
+                if (intersects)
+                    inside = !inside;
+            }
+
+            return inside;
+        }
+
+        public void SetDriver(PlayerVehicleMount mount)
+        {
+            driver = mount;
+            signedSpeedMph = 0f;
+            rb.isKinematic = true;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.WakeUp();
+            SetDriverViewHidden(true);
+        }
+
+        public void ClearDriver(PlayerVehicleMount mount)
+        {
+            if (driver == mount)
+            {
+                driver = null;
+                signedSpeedMph = 0f;
+                rb.isKinematic = false;
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                SetDriverViewHidden(false);
+            }
+        }
+
+        public void RegisterHullVisibilityOverrides(IEnumerable<Renderer> hiddenRenderers)
+        {
+            hullVisibilityHidden = hiddenRenderers == null
+                ? null
+                : new HashSet<Renderer>(hiddenRenderers);
+        }
+
+        public void SetDriverViewHidden(bool hidden)
+        {
+            if (driverViewHidden == hidden)
+                return;
+
+            if (bodyRenderers == null)
+                bodyRenderers = GetComponentsInChildren<Renderer>(true);
+
+            driverViewHidden = hidden;
+            for (int i = 0; i < bodyRenderers.Length; i++)
+            {
+                Renderer renderer = bodyRenderers[i];
+                if (renderer == null)
+                    continue;
+
+                if (!hidden && hullVisibilityHidden != null && hullVisibilityHidden.Contains(renderer))
+                {
+                    renderer.enabled = false;
+                    continue;
+                }
+
+                renderer.enabled = !hidden;
+            }
+        }
+
+        public void SetCargoOccupant(PlayerVehicleMount mount)
+        {
+            cargoOccupant = mount;
+        }
+
+        public void ClearCargoOccupant(PlayerVehicleMount mount)
+        {
+            if (cargoOccupant == mount)
+                cargoOccupant = null;
+        }
+
+        void FixedUpdate()
+        {
+            if (rb == null)
+                return;
+
+            if (HasDriver)
+                DriveWithInput();
+            else if (CanOccupyPose(rb.position, rb.rotation))
+            {
+                lastValidPosition = rb.position;
+                lastValidRotation = rb.rotation;
+                hasLastValidPose = true;
+            }
+        }
+
+        void DriveWithInput()
+        {
+            if (PlayerController.IsGameplayBlocked())
+                return;
+
+            bool throttle = Input.GetKey(KeyCode.W);
+            bool reverse = Input.GetKey(KeyCode.S);
+            bool brake = Input.GetKey(KeyCode.Space);
+            float steer = Input.GetAxisRaw("Horizontal");
+            float speedDelta = SpeedChangeMphPerSecond * Time.fixedDeltaTime;
+
+            if (brake)
+                signedSpeedMph = Mathf.MoveTowards(signedSpeedMph, 0f, speedDelta);
+            else if (throttle)
+                signedSpeedMph = Mathf.MoveTowards(signedSpeedMph, MaxForwardSpeedMph, speedDelta);
+            else if (reverse)
+            {
+                if (signedSpeedMph > 0f)
+                    signedSpeedMph = Mathf.MoveTowards(signedSpeedMph, 0f, speedDelta);
+                else
+                    signedSpeedMph = Mathf.MoveTowards(signedSpeedMph, -MaxReverseSpeedMph, speedDelta);
+            }
+
+            Vector3 nextPosition = rb.position;
+            Quaternion nextRotation = rb.rotation;
+
+            bool canSteer = CanSteerAtCurrentSpeed(signedSpeedMph);
+            if (canSteer && Mathf.Abs(steer) > 0.01f)
+            {
+                float turnAmount = steer * TurnSpeedDegreesPerSecond * Time.fixedDeltaTime;
+                ApplyYawAroundRudder(ref nextPosition, ref nextRotation, turnAmount);
+            }
+
+            float speedUnits = WorldScale.MilesPerHour(signedSpeedMph);
+            if (Mathf.Abs(speedUnits) > 0.0001f)
+            {
+                Vector3 nextBowForward = GetBowForwardWorld(nextRotation);
+                nextPosition += nextBowForward * speedUnits * Time.fixedDeltaTime;
+            }
+
+            if (TryApplyPose(nextPosition, nextRotation))
+            {
+                lastValidPosition = nextPosition;
+                lastValidRotation = nextRotation;
+                hasLastValidPose = true;
+            }
+            else if (Mathf.Abs(signedSpeedMph) > 0.01f)
+            {
+                Vector3 forwardOnly = rb.position
+                    + GetBowForwardWorld(rb.rotation) * speedUnits * Time.fixedDeltaTime;
+                if (TryApplyPose(forwardOnly, rb.rotation))
+                {
+                    lastValidPosition = forwardOnly;
+                    hasLastValidPose = true;
+                }
+                else
+                {
+                    signedSpeedMph = 0f;
+                }
+            }
+
+            StickToSurface();
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        static bool CanSteerAtCurrentSpeed(float speedMph)
+        {
+            if (Mathf.Abs(speedMph) < 0.01f)
+                return false;
+
+            if (speedMph > 0f)
+                return speedMph >= MinForwardSteerSpeedMph && speedMph <= MaxForwardSpeedMph;
+
+            return speedMph >= -MaxReverseSpeedMph;
+        }
+
+        bool TryApplyPose(Vector3 worldPosition, Quaternion worldRotation)
+        {
+            if (!CanOccupyPose(worldPosition, worldRotation))
+                return false;
+
+            rb.MoveRotation(worldRotation);
+            rb.MovePosition(worldPosition);
+            return true;
+        }
+
+        void ApplyYawAroundRudder(ref Vector3 position, ref Quaternion rotation, float turnAmountDegrees)
+        {
+            Vector3 hullCenterWorld = position + rotation * hullSampleCenterLocal;
+            Vector3 pivotWorld = hullCenterWorld - rotation * (bowLocalDirection * sternPivotDistanceFromHullCenter);
+            pivotWorld.y = hullCenterWorld.y;
+
+            Quaternion turn = Quaternion.Euler(0f, turnAmountDegrees, 0f);
+            Vector3 offsetFromPivot = position - pivotWorld;
+            offsetFromPivot.y = 0f;
+            position = pivotWorld + turn * offsetFromPivot;
+            rotation = turn * rotation;
+        }
+
+        void StickToSurface()
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds == null)
+                return;
+
+            Vector3 local = bounds.transform.InverseTransformPoint(rb.position);
+            float plainsBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(local.x, local.z, plainsBase);
+            float waterLocalY = groundY + LakeCatalog.WaterSurfaceLocalYOffset + WorldScale.Feet(waterVerticalOffsetFeet);
+            float waterWorldY = bounds.transform.TransformPoint(new Vector3(local.x, waterLocalY, local.z)).y;
+            float groundWorldY = bounds.transform.TransformPoint(new Vector3(local.x, groundY, local.z)).y;
+
+            Vector3 pos = rb.position;
+            if (LakeCatalog.IsBoatNavigableLocal(local.x, local.z))
+                pos.y = waterWorldY + bottomOffset;
+            else
+                pos.y = groundWorldY + bottomOffset;
+            rb.position = pos;
+
+            Vector3 velocity = rb.linearVelocity;
+            velocity.y = 0f;
+            rb.linearVelocity = velocity;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        bool CanOccupyPose(Vector3 worldPosition, Quaternion worldRotation)
+        {
+            var cavernBounds = GameContext.Instance?.CavernBounds;
+            if (cavernBounds == null)
+                return false;
+
+            Vector3 centerWorld = worldPosition + worldRotation * hullSampleCenterLocal;
+            Vector3 centerLocal = cavernBounds.transform.InverseTransformPoint(centerWorld);
+            if (LakeCatalog.IsBoatNavigableLocal(centerLocal.x, centerLocal.z))
+                return true;
+
+            foreach (Vector3 sampleLocal in GetHullSampleOffsetsLocal())
+            {
+                Vector3 sampleWorld = worldPosition + worldRotation * (hullSampleCenterLocal + sampleLocal);
+                Vector3 contentLocal = cavernBounds.transform.InverseTransformPoint(sampleWorld);
+                if (!LakeCatalog.IsBoatNavigableLocal(contentLocal.x, contentLocal.z))
+                    return false;
+            }
+
+            return true;
+        }
+
+        Vector3[] GetHullSampleOffsetsLocal()
+        {
+            float length = hullHalfLengthLocal;
+            float beam = hullHalfBeamLocal;
+            return new[]
+            {
+                new Vector3(0f, 0f, 0f),
+                bowLocalDirection * length,
+                -bowLocalDirection * length,
+                beamLocalDirection * beam,
+                -beamLocalDirection * beam,
+                bowLocalDirection * length + beamLocalDirection * beam,
+                bowLocalDirection * length - beamLocalDirection * beam,
+                -bowLocalDirection * length + beamLocalDirection * beam,
+                -bowLocalDirection * length - beamLocalDirection * beam,
+            };
+        }
+
+        Vector3 GetBowForwardWorld()
+        {
+            return GetBowForwardWorld(transform.rotation);
+        }
+
+        Vector3 GetBowForwardWorld(Quaternion worldRotation)
+        {
+            Vector3 worldForward = worldRotation * bowLocalDirection;
+            worldForward.y = 0f;
+            return worldForward.sqrMagnitude > 0.0001f ? worldForward.normalized : worldForward;
+        }
+
+        void CacheCargoDeckTopLocalY()
+        {
+            if (deck == null)
+                return;
+
+            var bedCollider = deck.GetComponent<BoxCollider>();
+            if (bedCollider == null)
+                return;
+
+            cargoDeckTopLocalY = bedCollider.center.y + bedCollider.size.y * 0.5f;
+        }
+
+        void CacheBottomOffset()
+        {
+            Physics.SyncTransforms();
+            float bottomY = transform.position.y;
+            foreach (var renderer in GetComponentsInChildren<Renderer>())
+            {
+                if (renderer == null)
+                    continue;
+
+                bottomY = Mathf.Min(bottomY, renderer.bounds.min.y);
+            }
+
+            bottomOffset = Mathf.Max(0.05f, transform.position.y - bottomY);
+        }
+
+        void CacheHullHalfExtentsLocal()
+        {
+            var box = GetComponent<BoxCollider>();
+            if (box == null)
+                return;
+
+            hullSampleCenterLocal = new Vector3(box.center.x, 0f, box.center.z);
+            Vector3 scaled = Vector3.Scale(box.size, transform.lossyScale);
+            bool bowAlongLocalX = Mathf.Abs(bowLocalDirection.x) > 0.5f;
+            hullHalfLengthLocal = (bowAlongLocalX ? scaled.x : scaled.z) * 0.28f;
+            hullHalfBeamLocal = (bowAlongLocalX ? scaled.z : scaled.x) * 0.28f;
+            hullHalfExtentsLocal = new Vector3(hullHalfLengthLocal, scaled.y * 0.25f, hullHalfBeamLocal);
+        }
+    }
+}

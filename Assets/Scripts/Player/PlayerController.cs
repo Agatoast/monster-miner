@@ -1,5 +1,6 @@
 using MonsterMiner.Core;
 using MonsterMiner.UI;
+using MonsterMiner.Util;
 using MonsterMiner.World;
 using UnityEngine;
 
@@ -245,13 +246,20 @@ namespace MonsterMiner.Player
                 return;
 
             var mount = GetComponent<PlayerVehicleMount>();
+            if (mount != null && mount.IsDrivingBoat)
+            {
+                pitch = 0f;
+                head.localRotation = Quaternion.identity;
+                return;
+            }
+
             if (mount != null && mount.IsDriving && mount.CurrentTruck != null)
             {
                 head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
                 return;
             }
 
-            if (mount != null && mount.IsInCargo)
+            if (mount != null && (mount.IsInCargo || mount.IsInBoatCargo))
             {
                 float cargoYaw = Input.GetAxis("Mouse X") * mouseSensitivity;
                 pitch -= Input.GetAxis("Mouse Y") * mouseSensitivity;
@@ -333,6 +341,16 @@ namespace MonsterMiner.Player
                 head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
         }
 
+        public void ApplyViewRecoil(float degrees)
+        {
+            if (degrees <= 0f || head == null)
+                return;
+
+            pitch -= degrees;
+            pitch = Mathf.Clamp(pitch, -85f, 85f);
+            head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+        }
+
         public void Respawn(Vector3 spawnPoint)
         {
             GetComponent<PlayerVehicleMount>()?.ForceDismount();
@@ -348,6 +366,20 @@ namespace MonsterMiner.Player
 
         public Vector3 SnapToFloorWorld(Vector3 worldPos) => SnapToFloor(worldPos);
 
+        public void ResetPlainsMovementState()
+        {
+            plainsJumpVelocity = 0f;
+            jumpRequested = false;
+        }
+
+        public float GetCapsuleBottomOffset()
+        {
+            float bottomOffset = CharacterHeight * 0.5f;
+            if (bodyCollider != null)
+                bottomOffset = (bodyCollider.height * 0.5f - bodyCollider.center.y) * Mathf.Abs(transform.lossyScale.y);
+            return bottomOffset;
+        }
+
         Vector3 SnapToFloor(Vector3 worldPos)
         {
             var bounds = GameContext.Instance?.CavernBounds;
@@ -355,22 +387,28 @@ namespace MonsterMiner.Player
                 return worldPos;
 
             var local = bounds.transform.InverseTransformPoint(worldPos);
-            float floorY;
-            if (bounds.TryResolveFloorWorldPoint(local.x, local.z, out var floorPoint))
+            float halfHeight = GetCapsuleBottomOffset();
+
+            if (bounds.TryResolveFloorWorldPoint(local.x, local.z, out Vector3 floorPoint))
             {
                 worldPos.x = floorPoint.x;
                 worldPos.z = floorPoint.z;
-                floorY = floorPoint.y;
+                worldPos.y = floorPoint.y + halfHeight + bounds.SpawnRestHeight;
+                return worldPos;
             }
-            else
+
+            if (FloorColliderUtility.TryResolveWalkFloorPoint(
+                    worldPos,
+                    WorldScale.Feet(250f),
+                    WorldScale.Feet(600f),
+                    bounds,
+                    out Vector3 rayFloorPoint))
             {
-                floorY = bounds.SampleFloorWorldY(local.x, local.z);
+                worldPos.y = rayFloorPoint.y + halfHeight + bounds.SpawnRestHeight;
+                return worldPos;
             }
 
-            float halfHeight = CharacterHeight * 0.5f;
-            if (bodyCollider != null)
-                halfHeight = (bodyCollider.height * 0.5f - bodyCollider.center.y) * transform.lossyScale.y;
-
+            float floorY = PlainsGroundSupport.SampleSupportGroundWorldY(bounds, local.x, local.z);
             worldPos.y = floorY + halfHeight + bounds.SpawnRestHeight;
             return worldPos;
         }

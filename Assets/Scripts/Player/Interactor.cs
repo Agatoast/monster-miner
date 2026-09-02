@@ -1,4 +1,4 @@
-﻿using MonsterMiner.Interaction;
+using MonsterMiner.Interaction;
 using MonsterMiner.Util;
 using UnityEngine;
 
@@ -7,6 +7,7 @@ namespace MonsterMiner.Player
     public class Interactor : MonoBehaviour
     {
         [SerializeField] float interactRange = 8f;
+        const float BoatHelmInteractRangeMultiplier = 2f;
         const QueryTriggerInteraction InteractTriggerQuery = QueryTriggerInteraction.Collide;
 
         Camera viewCamera;
@@ -48,13 +49,26 @@ namespace MonsterMiner.Player
                     float px = zoneLeft + (x + 0.5f) * step;
                     float py = zoneBottom + (y + 0.5f) * step;
                     var ray = viewCamera.ScreenPointToRay(new Vector3(px, py, 0f));
-                    if (!TryFindBestInteractableHit(ray, interactRange, gameObject, out var hit, out var interactable))
+                    if (!TryFindBestInteractableHit(ray, interactRange, gameObject, out var hit, out var interactable)
+                        && !TryFindBestInteractableHit(
+                            ray,
+                            interactRange * BoatHelmInteractRangeMultiplier,
+                            gameObject,
+                            out hit,
+                            out interactable,
+                            helmOnly: true))
                         continue;
 
                     float screenDistanceSq = (px - centerX) * (px - centerX) + (py - centerY) * (py - centerY);
 
-                    if (hit.distance < bestHitDistance ||
-                        (Mathf.Approximately(hit.distance, bestHitDistance) && screenDistanceSq < bestScreenDistanceSq))
+                    if (best == null
+                        || ShouldPreferInteractable(
+                            best,
+                            interactable,
+                            hit.distance,
+                            bestHitDistance,
+                            screenDistanceSq,
+                            bestScreenDistanceSq))
                     {
                         best = interactable;
                         bestHitDistance = hit.distance;
@@ -63,7 +77,56 @@ namespace MonsterMiner.Player
                 }
             }
 
+            if (best == null)
+            {
+                var mount = GetComponent<PlayerVehicleMount>();
+                if (mount != null && mount.IsDrivingBoat && mount.CurrentBoat != null)
+                {
+                    var helm = mount.CurrentBoat.GetComponentInChildren<BoatHelmInteract>(true);
+                    if (helm != null && helm.CanInteract(gameObject))
+                        best = helm;
+                }
+            }
+
+            if (best is BoatDeckInteract)
+            {
+                var mount = GetComponent<PlayerVehicleMount>();
+                if (mount != null && mount.IsInBoatCargo && !mount.IsDrivingBoat && mount.CurrentBoat != null)
+                {
+                    var centerRay = viewCamera.ScreenPointToRay(new Vector3(centerX, centerY, 0f));
+                    if (TryFindBestInteractableHit(
+                            centerRay,
+                            interactRange * BoatHelmInteractRangeMultiplier,
+                            gameObject,
+                            out _,
+                            out var helmTarget,
+                            helmOnly: true)
+                        && helmTarget is BoatHelmInteract)
+                    {
+                        best = helmTarget;
+                    }
+                }
+            }
+
             return best;
+        }
+
+        static bool ShouldPreferInteractable(
+            IInteractable currentBest,
+            IInteractable candidate,
+            float candidateDistance,
+            float currentBestDistance,
+            float candidateScreenDistanceSq,
+            float currentBestScreenDistanceSq)
+        {
+            if (candidate is BoatHelmInteract && currentBest is BoatDeckInteract)
+                return candidateDistance <= currentBestDistance + 0.75f;
+
+            if (candidateDistance < currentBestDistance)
+                return true;
+
+            return Mathf.Approximately(candidateDistance, currentBestDistance)
+                && candidateScreenDistanceSq < currentBestScreenDistanceSq;
         }
 
         static IInteractable ResolveInteractable(RaycastHit hit, GameObject interactor)
@@ -77,22 +140,39 @@ namespace MonsterMiner.Player
                 return parentInteractable;
 
             var truck = hit.collider.GetComponentInParent<DriveableTruck>();
-            if (truck == null)
+            if (truck != null)
+            {
+                var cab = truck.GetComponentInChildren<TruckCabInteract>(true);
+                var bed = truck.GetComponentInChildren<TruckBedInteract>(true);
+                Vector3 localHit = truck.transform.InverseTransformPoint(hit.point);
+                IInteractable preferred = localHit.z >= -0.2f ? cab : bed;
+
+                if (preferred != null && preferred.CanInteract(interactor))
+                    return preferred;
+
+                if (cab != null && cab.CanInteract(interactor))
+                    return cab;
+
+                if (bed != null && bed.CanInteract(interactor))
+                    return bed;
+
+                return null;
+            }
+
+            var boat = hit.collider.GetComponentInParent<DriveableBoat>();
+            if (boat == null)
                 return null;
 
-            var cab = truck.GetComponentInChildren<TruckCabInteract>(true);
-            var bed = truck.GetComponentInChildren<TruckBedInteract>(true);
-            Vector3 localHit = truck.transform.InverseTransformPoint(hit.point);
-            IInteractable preferred = localHit.z >= -0.2f ? cab : bed;
+            var helmInteract = hit.collider.GetComponent<BoatHelmInteract>();
+            if (helmInteract == null)
+                helmInteract = hit.collider.GetComponentInParent<BoatHelmInteract>();
 
-            if (preferred != null && preferred.CanInteract(interactor))
-                return preferred;
+            if (helmInteract != null && helmInteract.CanInteract(interactor))
+                return helmInteract;
 
-            if (cab != null && cab.CanInteract(interactor))
-                return cab;
-
-            if (bed != null && bed.CanInteract(interactor))
-                return bed;
+            var deck = boat.GetComponentInChildren<BoatDeckInteract>(true);
+            if (deck != null && deck.CanInteract(interactor))
+                return deck;
 
             return null;
         }
@@ -102,7 +182,8 @@ namespace MonsterMiner.Player
             float maxDistance,
             GameObject interactor,
             out RaycastHit bestHit,
-            out IInteractable interactable)
+            out IInteractable interactable,
+            bool helmOnly = false)
         {
             bestHit = default;
             interactable = null;
@@ -121,6 +202,9 @@ namespace MonsterMiner.Player
                 if (candidate == null || !candidate.CanInteract(interactor))
                     continue;
 
+                if (helmOnly && candidate is not BoatHelmInteract)
+                    continue;
+
                 if (hits[i].distance >= bestDistance)
                     continue;
 
@@ -130,6 +214,14 @@ namespace MonsterMiner.Player
             }
 
             return interactable != null;
+        }
+
+        float GetInteractRange(IInteractable target)
+        {
+            if (target is BoatHelmInteract)
+                return interactRange * BoatHelmInteractRangeMultiplier;
+
+            return interactRange;
         }
 
         public void TryInteract()
@@ -157,7 +249,17 @@ namespace MonsterMiner.Player
                     float px = zoneLeft + (x + 0.5f) * step;
                     float py = zoneBottom + (y + 0.5f) * step;
                     var ray = viewCamera.ScreenPointToRay(new Vector3(px, py, 0f));
-                    if (!TryFindBestInteractableHit(ray, interactRange, gameObject, out _, out var interactable))
+                    float range = GetInteractRange(target);
+                    if (target is BoatHelmInteract)
+                    {
+                        if (TryFindBestInteractableHit(ray, range, gameObject, out _, out var helmInteractable, helmOnly: true)
+                            && helmInteractable == target)
+                            return true;
+
+                        continue;
+                    }
+
+                    if (!TryFindBestInteractableHit(ray, range, gameObject, out _, out var interactable))
                         continue;
 
                     if (interactable == target)

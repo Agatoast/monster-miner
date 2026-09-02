@@ -93,13 +93,16 @@ namespace MonsterMiner.World
 
         static bool ShouldExcludePlainsTriangle(float localX, float localZ)
         {
-            if (LandQuarry2Boundary.ContainsLocal(localX, localZ))
+            if (LandQuarry2Boundary.IsSnowGroundLocal(localX, localZ))
                 return true;
 
             if (LakeCatalog.IsLakeLocal(localX, localZ))
                 return true;
 
             if (LakeCatalog.IsBeachLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsLakeIslandLocal(localX, localZ))
                 return true;
 
             return false;

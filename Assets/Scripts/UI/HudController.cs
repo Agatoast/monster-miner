@@ -1,4 +1,4 @@
-﻿using MonsterMiner.Core;
+using MonsterMiner.Core;
 using MonsterMiner.Economy;
 using MonsterMiner.Interaction;
 using MonsterMiner.UI;
@@ -10,6 +10,7 @@ namespace MonsterMiner.UI
     {
         string message = string.Empty;
         float messageTimer;
+        float messageBottomOffset = 120f;
         string centerMessage = string.Empty;
         float centerMessageTimer;
         float centerMessageScreenY = 0.5f;
@@ -39,10 +40,11 @@ namespace MonsterMiner.UI
                 ctx.PlayerThirst.OnThirstChanged += (_, __) => { };
         }
 
-        public void ShowMessage(string text)
+        public void ShowMessage(string text, float bottomOffsetFromScreen = 120f)
         {
             message = text;
             messageTimer = 3f;
+            messageBottomOffset = bottomOffsetFromScreen;
         }
 
         public void ShowCenterMessage(string text, float screenHeightFraction = 0.5f)
@@ -182,7 +184,7 @@ namespace MonsterMiner.UI
             TruckDashboardDisplay.Draw(ctx);
 
             if (!string.IsNullOrEmpty(message))
-                GUI.Label(new Rect(Screen.width * 0.5f - 300f, Screen.height - 120f, 600f, 40f), message, bigCenter);
+                GUI.Label(new Rect(Screen.width * 0.5f - 300f, Screen.height - messageBottomOffset, 600f, 40f), message, bigCenter);
 
             InventoryHotbarDisplay.Draw(ctx);
 

@@ -1,4 +1,5 @@
 using MonsterMiner.Core;
+using MonsterMiner.Util;
 using MonsterMiner.World;
 using UnityEngine;
 
@@ -323,7 +324,8 @@ namespace MonsterMiner.UI
                 if (bounds.IsOnPlateauLocal(localX, localZ))
                     return new Color32(168, 142, 98, 255);
 
-                if (QuarryCatalog.IsLandQuarry2Local(localX, localZ))
+                if (QuarryCatalog.IsLandQuarry2Local(localX, localZ)
+                    || LandQuarry2Boundary.IsSnowGroundLocal(localX, localZ))
                 {
                     float snow = Mathf.PerlinNoise(localX * 0.018f + 12.4f, localZ * 0.018f + 8.7f);
                     byte tone = (byte)Mathf.Clamp(248f + snow * 7f, 245f, 255f);
@@ -344,14 +346,29 @@ namespace MonsterMiner.UI
             if (distance <= wallBase)
                 return new Color32(92, 74, 58, 255);
 
-            if (bounds != null && !WorldRegion.IsLandLocalRegion(bounds, localX, localZ))
-                return new Color32(40, 36, 30, 255);
-
             if (LakeCatalog.IsBeachLocal(localX, localZ))
                 return new Color32(200, 180, 130, 255);
 
-            if (LakeCatalog.IsOpenWaterLocal(localX, localZ))
-                return new Color32(30, 96, 158, 255);
+            if (LandQuarry2Boundary.IsLakeApproachLandLocal(localX, localZ)
+                || LandQuarry2Boundary.IsSnowGroundLocal(localX, localZ))
+            {
+                float snow = Mathf.PerlinNoise(localX * 0.018f + 12.4f, localZ * 0.018f + 8.7f);
+                byte tone = (byte)Mathf.Clamp(248f + snow * 7f, 245f, 255f);
+                return new Color32(tone, tone, tone, 255);
+            }
+
+            if (LakeCatalog.IsLakeIslandLocal(localX, localZ))
+            {
+                float island = Mathf.PerlinNoise(localX * 0.02f + 31.2f, localZ * 0.02f + 17.4f);
+                byte tone = (byte)Mathf.Clamp(88 + island * 42f, 72f, 132f);
+                return new Color32(58, tone, 44, 255);
+            }
+
+            if (LakeCatalog.IsOpenWaterLocal(localX, localZ) || LakeCatalog.IsLakeLocal(localX, localZ))
+                return MapWaterColorSampler.Sample(localX, localZ);
+
+            if (bounds != null && !WorldRegion.IsLandLocalRegion(bounds, localX, localZ))
+                return new Color32(40, 36, 30, 255);
 
             float grass = Mathf.PerlinNoise(localX * 0.012f + 4.1f, localZ * 0.012f + 9.7f);
             byte g = (byte)Mathf.Clamp(70 + grass * 50f, 60f, 130f);

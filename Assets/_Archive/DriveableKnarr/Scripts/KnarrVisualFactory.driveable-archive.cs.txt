@@ -1,0 +1,1251 @@
+using System.Collections.Generic;
+using MonsterMiner.Player;
+using MonsterMiner.World;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace MonsterMiner.Util
+{
+    public static class KnarrVisualFactory
+    {
+        const string ResourcePath = "Models/Props/d_knarr_wood";
+        public const float BoatVerticalOffsetFeet = -30f;
+        public const float BoatNorthOffsetFeet = 100f;
+        public const float BoatScale = 10f;
+        const float BoatSpawnYawDegrees = 90f;
+
+        public static GameObject CreateAtBeach(Transform contentRoot, Vector3 contentLocalPosition)
+        {
+            var prefab = Resources.Load<GameObject>(ResourcePath);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"Monster Miner: knarr boat mesh not found at Resources/{ResourcePath}.");
+                return null;
+            }
+
+            if (contentRoot == null)
+                return null;
+
+            var boat = Object.Instantiate(prefab, contentRoot, false);
+            boat.name = "WarrensonsBoat";
+            boat.transform.localPosition = contentLocalPosition;
+            boat.transform.localRotation = Quaternion.Euler(0f, BoatSpawnYawDegrees, 0f);
+            boat.transform.localScale = Vector3.one;
+            KnifeVisualFactory.ApplyUrpMaterials(boat);
+            StripImportedColliders(boat);
+
+            Vector3 spawnWorldXZ = contentRoot.TransformPoint(contentLocalPosition);
+            Vector3 anchorBottomCenterWorld = GetHullBottomCenterWorld(boat);
+            anchorBottomCenterWorld.x = spawnWorldXZ.x;
+            anchorBottomCenterWorld.z = spawnWorldXZ.z;
+
+            boat.transform.localScale = Vector3.one * BoatScale;
+            PreserveHullBottomCenterWorld(boat, anchorBottomCenterWorld);
+
+            float waterWorldY = SampleWaterSurfaceWorldY(contentRoot, contentLocalPosition);
+            AlignHullBottomToSurface(boat, waterWorldY + WorldScale.Feet(BoatVerticalOffsetFeet));
+
+            Vector3 bowLocalDirection = ResolveBowLocalDirection(boat.transform, contentRoot);
+            SnapBoatToShore(boat, contentRoot, bowLocalDirection, contentLocalPosition.x);
+            TrimSailToMastTop(boat);
+            HideOarVisual(boat);
+
+            Vector3 spawnWorldPosition = boat.transform.position;
+            Quaternion spawnWorldRotation = boat.transform.rotation;
+
+            ConfigureDriveable(boat, contentRoot, spawnWorldPosition, spawnWorldRotation);
+            TrimSailToMastTop(boat);
+            HideOarVisual(boat);
+            ApplyUnderwaterHullVisibility(boat, contentRoot);
+            CreateBoatShoreSandSemicircle(contentRoot, boat, bowLocalDirection);
+
+            float sternContentZ = ComputeSternContentZ(boat, contentRoot, bowLocalDirection);
+            LakeCatalog.SetBoatLaunchWaterlineContentZ(sternContentZ);
+
+            return boat;
+        }
+
+        const float SailVisibleHeightFeet = 2f;
+        const float DeckAboveWaterSurfaceFeet = 1.35f;
+        const float DeckVisualThicknessFeet = 0.5f;
+        const float DeckGridCellFeet = 1f;
+        const int DeckRenderQueue = 3100;
+        static readonly Color SailDeckFallbackColor = new Color(0.477f, 0.214f, 0.055f);
+        const float ProwInsetFromBowFeet = 4f;
+        const float MastInteractPaddingFeet = 1f;
+
+        const float RudderInsetFromSternFeet = 4f;
+        const float DeckCargoEntryAftOffsetFeet = 14f;
+
+        static float ScaledLocalFeet(float feet) => WorldScale.Feet(feet) / BoatScale;
+
+        static void ConfigureDriveable(
+            GameObject boat,
+            Transform contentRoot,
+            Vector3 spawnWorldPosition,
+            Quaternion spawnWorldRotation)
+        {
+            if (!TryGetRendererBounds(boat, out var bounds))
+                return;
+
+            Transform root = boat.transform;
+            Vector3 minLocal = root.InverseTransformPoint(bounds.min);
+            Vector3 maxLocal = root.InverseTransformPoint(bounds.max);
+            Vector3 localSize = maxLocal - minLocal;
+            localSize = new Vector3(Mathf.Abs(localSize.x), Mathf.Abs(localSize.y), Mathf.Abs(localSize.z));
+
+            Vector3 bowLocalDirection = ResolveBowLocalDirection(root, contentRoot);
+            bool bowAlongLocalX = Mathf.Abs(bowLocalDirection.x) > 0.5f;
+            float hullLength = (bowAlongLocalX ? localSize.x : localSize.z) * 0.68f;
+
+            Vector3 boatCenterContent = contentRoot.InverseTransformPoint(bounds.center);
+            float deckWorldY = SampleWaterSurfaceWorldY(contentRoot, boatCenterContent)
+                + WorldScale.Feet(DeckAboveWaterSurfaceFeet);
+            float floorLocalY = root.InverseTransformPoint(new Vector3(bounds.center.x, deckWorldY, bounds.center.z)).y;
+            Color deckColor = SampleSailDeckColor(boat);
+
+            Transform deck = CreateHullFitWalkDeck(boat, root, floorLocalY, deckColor, out List<Vector2> deckPolygonBoatRoot);
+            if (deck == null)
+                return;
+
+            List<Vector2> deckBoundaryCargoLocal = ConvertDeckPolygonToCargoLocal(
+                deckPolygonBoatRoot,
+                root,
+                deck,
+                floorLocalY);
+
+            Vector3 deckCenterLocal = root.InverseTransformPoint(deck.position);
+            float deckTopLocalY = deckCenterLocal.y;
+            float deckCenterLocalX = deckCenterLocal.x;
+            float deckCenterLocalZ = deckCenterLocal.z;
+
+            Vector3 helmSeatLocal = deckCenterLocal + bowLocalDirection * ScaledLocalFeet(10f);
+            helmSeatLocal.y = deckTopLocalY;
+            Vector3 helmInteractCenter = helmSeatLocal;
+            Vector3 helmInteractSize = new Vector3(ScaledLocalFeet(1.8f), ScaledLocalFeet(1.6f), ScaledLocalFeet(2.4f));
+            Vector3 mastCenterLocal = default;
+            bool hasMast = TryFindMastAnchor(boat, root, deckTopLocalY, out mastCenterLocal, out Vector3 mastSizeLocal);
+            if (hasMast)
+            {
+                helmInteractCenter = new Vector3(mastCenterLocal.x, deckTopLocalY, mastCenterLocal.z);
+                float padding = ScaledLocalFeet(MastInteractPaddingFeet);
+                helmInteractSize = mastSizeLocal + new Vector3(padding * 2f, padding * 2f, padding * 2f);
+                helmInteractSize.x = Mathf.Max(helmInteractSize.x, ScaledLocalFeet(2.4f));
+                helmInteractSize.y = Mathf.Max(helmInteractSize.y, ScaledLocalFeet(8f));
+                helmInteractSize.z = Mathf.Max(helmInteractSize.z, ScaledLocalFeet(2.4f));
+            }
+
+            var helm = new GameObject("BoatHelmSeat").transform;
+            helm.SetParent(root, false);
+            helm.localPosition = helmSeatLocal;
+            helm.localRotation = Quaternion.LookRotation(bowLocalDirection, Vector3.up);
+
+            float sternPivotDistanceFromCenter = hullLength * 0.5f - ScaledLocalFeet(RudderInsetFromSternFeet);
+
+            var rb = boat.GetComponent<Rigidbody>();
+            if (rb == null)
+                rb = boat.AddComponent<Rigidbody>();
+            rb.mass = 900f;
+            rb.linearDamping = 1.2f;
+            rb.angularDamping = 3f;
+            rb.useGravity = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+            var hullBox = boat.GetComponent<BoxCollider>();
+            if (hullBox == null)
+                hullBox = boat.AddComponent<BoxCollider>();
+            hullBox.isTrigger = true;
+            hullBox.center = new Vector3(deckCenterLocalX, (minLocal.y + maxLocal.y) * 0.5f, deckCenterLocalZ);
+            hullBox.size = localSize * 0.92f;
+
+            Vector3 deckHalfExtents = GetDeckHalfExtentsLocal(deck);
+            float localInteractHeight = ScaledLocalFeet(1.6f);
+            Vector3 deckInteractSize = new Vector3(
+                deckHalfExtents.x * 2f,
+                localInteractHeight,
+                deckHalfExtents.z * 2f);
+            AddInteractTrigger<BoatHelmInteract>(
+                root,
+                helmInteractCenter,
+                helmInteractSize);
+            AddInteractTrigger<BoatDeckInteract>(
+                root,
+                deckCenterLocal + new Vector3(0f, ScaledLocalFeet(0.8f), 0f),
+                deckInteractSize);
+
+            EnsureDeckRendersAboveHullAndWater(boat);
+
+            Vector3 cargoEntryLocal = ComputeCargoEntryLocalPosition(
+                root,
+                deck,
+                deckCenterLocal,
+                bowLocalDirection,
+                floorLocalY,
+                hasMast ? mastCenterLocal : (Vector3?)null);
+
+            var driveable = boat.GetComponent<DriveableBoat>();
+            if (driveable == null)
+                driveable = boat.AddComponent<DriveableBoat>();
+            driveable.Initialize(
+                deck,
+                helm,
+                deckHalfExtents,
+                BoatVerticalOffsetFeet,
+                bowLocalDirection,
+                sternPivotDistanceFromCenter,
+                deckBoundaryCargoLocal,
+                cargoEntryLocal);
+
+            boat.transform.SetPositionAndRotation(spawnWorldPosition, spawnWorldRotation);
+            rb.position = spawnWorldPosition;
+            rb.rotation = spawnWorldRotation;
+            Physics.SyncTransforms();
+            driveable.PreserveSpawnPose(spawnWorldPosition, spawnWorldRotation);
+
+            foreach (var helmInteract in boat.GetComponentsInChildren<BoatHelmInteract>(true))
+                helmInteract.Initialize(driveable);
+            foreach (var deckInteract in boat.GetComponentsInChildren<BoatDeckInteract>(true))
+                deckInteract.Initialize(driveable);
+        }
+
+        static Vector3 ComputeCargoEntryLocalPosition(
+            Transform boatRoot,
+            Transform cargoDeck,
+            Vector3 deckCenterLocal,
+            Vector3 bowLocalDirection,
+            float walkDeckTopLocalY,
+            Vector3? mastCenterLocal)
+        {
+            Vector3 entryBoatRoot = deckCenterLocal;
+            entryBoatRoot -= bowLocalDirection * ScaledLocalFeet(DeckCargoEntryAftOffsetFeet);
+
+            if (mastCenterLocal.HasValue)
+            {
+                Vector3 mastPos = mastCenterLocal.Value;
+                Vector3 delta = entryBoatRoot - mastPos;
+                delta.y = 0f;
+                float mastClearance = ScaledLocalFeet(6f);
+                if (delta.sqrMagnitude < mastClearance * mastClearance)
+                {
+                    entryBoatRoot = mastPos - bowLocalDirection * ScaledLocalFeet(DeckCargoEntryAftOffsetFeet);
+                    entryBoatRoot.y = deckCenterLocal.y;
+                }
+            }
+
+            float deckTopLocalY = cargoDeck.InverseTransformPoint(
+                boatRoot.TransformPoint(new Vector3(0f, walkDeckTopLocalY, 0f))).y;
+            Vector3 entryLocal = cargoDeck.InverseTransformPoint(boatRoot.TransformPoint(entryBoatRoot));
+            entryLocal.y = deckTopLocalY + WorldScale.CharacterHeightUnits * 0.5f;
+            return entryLocal;
+        }
+
+        static Vector3 ResolveBowLocalDirection(Transform boatRoot, Transform contentRoot)
+        {
+            Vector3 bowTargetDirection = contentRoot != null
+                ? contentRoot.TransformDirection(Vector3.forward)
+                : Vector3.forward;
+            bowTargetDirection.y = 0f;
+            if (bowTargetDirection.sqrMagnitude < 0.0001f)
+                return Vector3.right;
+            bowTargetDirection.Normalize();
+
+            Vector3 bestAxis = Vector3.right;
+            float bestAlignment = float.NegativeInfinity;
+            Vector3[] axisCandidates = { Vector3.right, Vector3.left, Vector3.forward, Vector3.back };
+            for (int i = 0; i < axisCandidates.Length; i++)
+            {
+                Vector3 worldDirection = boatRoot.TransformDirection(axisCandidates[i]);
+                worldDirection.y = 0f;
+                if (worldDirection.sqrMagnitude < 0.0001f)
+                    continue;
+
+                worldDirection.Normalize();
+                float alignment = Vector3.Dot(worldDirection, bowTargetDirection);
+                if (alignment > bestAlignment)
+                {
+                    bestAlignment = alignment;
+                    bestAxis = axisCandidates[i];
+                }
+            }
+
+            return bestAxis;
+        }
+
+        static void TrimSailToMastTop(GameObject boat)
+        {
+            MeshFilter sailFilter = FindSailMeshFilter(boat);
+            if (sailFilter == null || sailFilter.sharedMesh == null)
+                return;
+
+            Transform sailTransform = sailFilter.transform;
+            var source = sailFilter.sharedMesh;
+            var vertices = source.vertices;
+
+            float sailTopWorldY = float.NegativeInfinity;
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                float worldY = sailTransform.TransformPoint(vertices[i]).y;
+                if (worldY > sailTopWorldY)
+                    sailTopWorldY = worldY;
+            }
+
+            float cutBottomWorldY = sailTopWorldY - WorldScale.Feet(SailVisibleHeightFeet);
+            const float cutEpsilon = 0.0001f;
+
+            var keptTriangles = new List<int>(source.triangles.Length);
+            var triangles = source.triangles;
+            for (int t = 0; t < triangles.Length; t += 3)
+            {
+                int i0 = triangles[t];
+                int i1 = triangles[t + 1];
+                int i2 = triangles[t + 2];
+                float y0 = sailTransform.TransformPoint(vertices[i0]).y;
+                float y1 = sailTransform.TransformPoint(vertices[i1]).y;
+                float y2 = sailTransform.TransformPoint(vertices[i2]).y;
+                if (y0 < cutBottomWorldY - cutEpsilon
+                    || y1 < cutBottomWorldY - cutEpsilon
+                    || y2 < cutBottomWorldY - cutEpsilon)
+                {
+                    continue;
+                }
+
+                keptTriangles.Add(i0);
+                keptTriangles.Add(i1);
+                keptTriangles.Add(i2);
+            }
+
+            if (keptTriangles.Count == 0)
+            {
+                sailFilter.gameObject.SetActive(false);
+                return;
+            }
+
+            var mesh = Object.Instantiate(source);
+            mesh.name = "KnarrSailTrimmed";
+            mesh.vertices = vertices;
+            mesh.triangles = keptTriangles.ToArray();
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            sailFilter.mesh = mesh;
+        }
+
+        static void HideOarVisual(GameObject boat)
+        {
+            MeshFilter oarFilter = FindOarMeshFilter(boat);
+            if (oarFilter == null)
+                return;
+
+            var renderer = oarFilter.GetComponent<Renderer>();
+            if (renderer != null)
+                renderer.enabled = false;
+        }
+
+        static MeshFilter FindOarMeshFilter(GameObject boat)
+        {
+            foreach (var filter in boat.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter != null
+                    && filter.gameObject.name.IndexOf("Oar", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return filter;
+                }
+            }
+
+            return null;
+        }
+
+        static MeshFilter FindSailMeshFilter(GameObject boat)
+        {
+            foreach (var filter in boat.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter != null
+                    && filter.gameObject.name.IndexOf("Sail", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return filter;
+                }
+            }
+
+            return null;
+        }
+
+        const float ShoreSandSemicircleDiameterFeet = 50f;
+        const float ShoreSandAboveCollisionLift = 0.001f;
+
+        static void ApplyUnderwaterHullVisibility(GameObject boat, Transform contentRoot)
+        {
+            if (boat == null || contentRoot == null || !TryGetRendererBounds(boat, out var bounds))
+                return;
+
+            Vector3 boatContent = contentRoot.InverseTransformPoint(bounds.center);
+            float waterWorldY = SampleWaterSurfaceWorldY(contentRoot, boatContent);
+            var permanentlyHidden = new List<Renderer>();
+            BoatHullWaterVisibility.Apply(boat, waterWorldY, permanentlyHidden);
+
+            var driveable = boat.GetComponent<DriveableBoat>();
+            driveable?.RegisterHullVisibilityOverrides(permanentlyHidden);
+        }
+
+        static void CreateBoatShoreSandSemicircle(Transform contentRoot, GameObject boat, Vector3 bowLocalDirection)
+        {
+            if (contentRoot == null || boat == null)
+                return;
+
+            var existing = contentRoot.Find("BoatShoreSandSemicircle");
+            if (existing != null)
+                Object.Destroy(existing.gameObject);
+
+            const int segments = 48;
+            float radius = WorldScale.Feet(ShoreSandSemicircleDiameterFeet * 0.5f);
+            float plainsBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+
+            Vector3 bowWorld = boat.transform.TransformDirection(bowLocalDirection).normalized;
+            Vector3 beamWorld = Vector3.Cross(Vector3.up, bowWorld).normalized;
+            Vector3 bowXZ = contentRoot.InverseTransformDirection(bowWorld);
+            bowXZ.y = 0f;
+            bowXZ.Normalize();
+            Vector3 beamXZ = contentRoot.InverseTransformDirection(beamWorld);
+            beamXZ.y = 0f;
+            beamXZ.Normalize();
+
+            Vector3 boatContent = contentRoot.InverseTransformPoint(boat.transform.position);
+            float anchorZ = LakeCatalog.GetSandWaterlineContentZ(boatContent.x);
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(boatContent.x, anchorZ, plainsBase);
+            float surfaceY = groundY + ShoreSandAboveCollisionLift;
+            Vector3 flatCenter = new Vector3(boatContent.x, surfaceY, anchorZ);
+
+            var vertices = new List<Vector3>(segments + 2);
+            var triangles = new List<int>(segments * 3);
+            var uvs = new List<Vector2>(segments + 2);
+
+            for (int i = 0; i <= segments; i++)
+            {
+                float t = i / (float)segments * Mathf.PI;
+                Vector3 point = flatCenter
+                    + beamXZ * (Mathf.Cos(t) * radius)
+                    - bowXZ * (Mathf.Sin(t) * radius);
+                vertices.Add(point);
+                uvs.Add(new Vector2(Mathf.Cos(t) * 0.5f + 0.5f, Mathf.Sin(t)));
+            }
+
+            int hubIndex = vertices.Count;
+            vertices.Add(flatCenter);
+            uvs.Add(new Vector2(0.5f, 0f));
+
+            for (int i = 0; i < segments; i++)
+            {
+                triangles.Add(hubIndex);
+                triangles.Add(i);
+                triangles.Add(i + 1);
+            }
+
+            var mesh = new Mesh { name = "BoatShoreSandSemicircleMesh" };
+            mesh.SetVertices(vertices);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            var surfaceGo = new GameObject("BoatShoreSandSemicircle");
+            surfaceGo.transform.SetParent(contentRoot, false);
+            surfaceGo.transform.localPosition = Vector3.zero;
+            surfaceGo.transform.localRotation = Quaternion.identity;
+            surfaceGo.transform.localScale = Vector3.one;
+
+            var meshFilter = surfaceGo.AddComponent<MeshFilter>();
+            meshFilter.sharedMesh = mesh;
+
+            var meshRenderer = surfaceGo.AddComponent<MeshRenderer>();
+            meshRenderer.sharedMaterial = CavernSurfaceMaterialFactory.GetBeachSandVisualMaterial();
+            meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            meshRenderer.receiveShadows = false;
+        }
+
+        static void SnapBoatToShore(
+            GameObject boat,
+            Transform contentRoot,
+            Vector3 bowLocalDirection,
+            float beachCenterContentX)
+        {
+            float targetSternZ = LakeCatalog.GetBeachSouthEdgeZ() + WorldScale.Feet(BoatNorthOffsetFeet);
+            float sternZ = ComputeSternContentZ(boat, contentRoot, bowLocalDirection);
+            float deltaContentZ = targetSternZ - sternZ;
+            if (Mathf.Abs(deltaContentZ) > 0.0001f)
+            {
+                Vector3 worldDelta = contentRoot.TransformVector(new Vector3(0f, 0f, deltaContentZ));
+                boat.transform.position += new Vector3(worldDelta.x, 0f, worldDelta.z);
+            }
+
+            if (!TryGetRendererBounds(boat, out var bounds))
+                return;
+
+            float targetWorldX = contentRoot.TransformPoint(new Vector3(beachCenterContentX, 0f, 0f)).x;
+            boat.transform.position += new Vector3(targetWorldX - bounds.center.x, 0f, 0f);
+        }
+
+        static bool TryFindMastAnchor(
+            GameObject boat,
+            Transform boatRoot,
+            float deckTopLocalY,
+            out Vector3 localCenter,
+            out Vector3 localSize)
+        {
+            localCenter = default;
+            localSize = default;
+
+            Vector3 mastXZ = Vector3.zero;
+            float mastTopLocalY = deckTopLocalY + ScaledLocalFeet(8f);
+            bool found = false;
+
+            MeshFilter sailFilter = FindSailMeshFilter(boat);
+            if (sailFilter != null && TryGetMeshFilterBounds(sailFilter, out Bounds sailBounds))
+            {
+                Vector3 sailCenterLocal = boatRoot.InverseTransformPoint(sailBounds.center);
+                mastXZ = new Vector3(sailCenterLocal.x, 0f, sailCenterLocal.z);
+                mastTopLocalY = Mathf.Max(
+                    mastTopLocalY,
+                    boatRoot.InverseTransformPoint(sailBounds.max).y);
+                found = true;
+            }
+
+            if (TryFindHullWoodMeshFilter(boat, out MeshFilter hullFilter)
+                && TryGetMeshFilterBounds(hullFilter, out Bounds hullBounds))
+            {
+                Vector3 hullCenterLocal = boatRoot.InverseTransformPoint(hullBounds.center);
+                if (!found)
+                    mastXZ = new Vector3(hullCenterLocal.x, 0f, hullCenterLocal.z);
+                else
+                {
+                    mastXZ.x = (mastXZ.x + hullCenterLocal.x) * 0.5f;
+                    mastXZ.z = (mastXZ.z + hullCenterLocal.z) * 0.5f;
+                }
+
+                mastTopLocalY = Mathf.Max(
+                    mastTopLocalY,
+                    boatRoot.InverseTransformPoint(hullBounds.max).y);
+                found = true;
+            }
+
+            if (!found)
+                return false;
+
+            float mastHeight = Mathf.Max(mastTopLocalY - deckTopLocalY, ScaledLocalFeet(6f));
+            float columnWidth = ScaledLocalFeet(2.8f);
+            localCenter = new Vector3(mastXZ.x, deckTopLocalY + mastHeight * 0.5f, mastXZ.z);
+            localSize = new Vector3(columnWidth, mastHeight, columnWidth);
+            return true;
+        }
+
+        static bool TryGetMeshFilterBounds(MeshFilter meshFilter, out Bounds bounds)
+        {
+            bounds = default;
+            if (meshFilter == null)
+                return false;
+
+            var renderer = meshFilter.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                bounds = renderer.bounds;
+                return true;
+            }
+
+            if (meshFilter.sharedMesh == null)
+                return false;
+
+            bounds = TransformBounds(meshFilter.sharedMesh.bounds, meshFilter.transform);
+            return true;
+        }
+
+        static Bounds TransformBounds(Bounds localBounds, Transform transform)
+        {
+            Vector3 center = transform.TransformPoint(localBounds.center);
+            Vector3 extents = localBounds.extents;
+            Vector3 axisX = transform.TransformVector(new Vector3(extents.x, 0f, 0f));
+            Vector3 axisY = transform.TransformVector(new Vector3(0f, extents.y, 0f));
+            Vector3 axisZ = transform.TransformVector(new Vector3(0f, 0f, extents.z));
+            extents = new Vector3(
+                Mathf.Abs(axisX.x) + Mathf.Abs(axisY.x) + Mathf.Abs(axisZ.x),
+                Mathf.Abs(axisX.y) + Mathf.Abs(axisY.y) + Mathf.Abs(axisZ.y),
+                Mathf.Abs(axisX.z) + Mathf.Abs(axisY.z) + Mathf.Abs(axisZ.z));
+            return new Bounds(center, extents * 2f);
+        }
+
+        static List<Vector2> ConvertDeckPolygonToCargoLocal(
+            IReadOnlyList<Vector2> polygonBoatRoot,
+            Transform boatRoot,
+            Transform cargoDeck,
+            float floorLocalY)
+        {
+            if (polygonBoatRoot == null || polygonBoatRoot.Count < 3 || boatRoot == null || cargoDeck == null)
+                return null;
+
+            var converted = new List<Vector2>(polygonBoatRoot.Count);
+            for (int i = 0; i < polygonBoatRoot.Count; i++)
+            {
+                Vector3 onBoatRoot = new Vector3(polygonBoatRoot[i].x, floorLocalY, polygonBoatRoot[i].y);
+                Vector3 cargoLocal = cargoDeck.InverseTransformPoint(boatRoot.TransformPoint(onBoatRoot));
+                converted.Add(new Vector2(cargoLocal.x, cargoLocal.z));
+            }
+
+            return converted;
+        }
+
+        static Transform CreateHullFitWalkDeck(
+            GameObject boat,
+            Transform boatRoot,
+            float floorLocalY,
+            Color deckColor,
+            out List<Vector2> deckPolygonBoatRoot)
+        {
+            deckPolygonBoatRoot = null;
+            if (!TryFindHullWoodMeshFilter(boat, out MeshFilter meshFilter))
+                return null;
+
+            if (!TrySliceHullDeckPolygon(meshFilter, boatRoot, floorLocalY, out List<Vector2> polygon))
+                return null;
+
+            deckPolygonBoatRoot = polygon;
+
+            float deckThickness = ScaledLocalFeet(DeckVisualThicknessFeet);
+            Mesh deckMesh = BuildSolidExtrudedDeckMesh(polygon, floorLocalY, deckThickness);
+            if (deckMesh == null || deckMesh.vertexCount == 0)
+                return null;
+
+            var walkDeck = new GameObject("BoatWalkDeck");
+            walkDeck.transform.SetParent(boatRoot, false);
+            walkDeck.transform.localPosition = Vector3.zero;
+            walkDeck.transform.localRotation = Quaternion.identity;
+            walkDeck.transform.localScale = Vector3.one;
+
+            var meshFilterComponent = walkDeck.AddComponent<MeshFilter>();
+            meshFilterComponent.sharedMesh = deckMesh;
+
+            var meshRenderer = walkDeck.AddComponent<MeshRenderer>();
+            meshRenderer.sharedMaterial = CreateBoatDeckMaterial(deckColor);
+            meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            meshRenderer.receiveShadows = false;
+
+            float cellSize = ScaledLocalFeet(DeckGridCellFeet);
+            AddWalkDeckColliders(walkDeck.transform, polygon, floorLocalY, cellSize, deckThickness);
+
+            Bounds deckBounds = deckMesh.bounds;
+            var cargoDeck = new GameObject("BoatDeck").transform;
+            cargoDeck.SetParent(walkDeck.transform, false);
+            cargoDeck.localPosition = new Vector3(deckBounds.center.x, deckBounds.max.y, deckBounds.center.z);
+            cargoDeck.localRotation = Quaternion.identity;
+
+            var cargoReference = cargoDeck.gameObject.AddComponent<BoxCollider>();
+            cargoReference.isTrigger = false;
+            cargoReference.size = new Vector3(deckBounds.size.x, deckThickness, deckBounds.size.z);
+            cargoReference.center = new Vector3(0f, -deckThickness * 0.5f, 0f);
+
+            return cargoDeck;
+        }
+
+        static Vector3 GetDeckHalfExtentsLocal(Transform deck)
+        {
+            Transform walkDeck = deck.parent != null && deck.parent.name == "BoatWalkDeck"
+                ? deck.parent
+                : deck.root.Find("BoatWalkDeck");
+
+            if (walkDeck != null && walkDeck.TryGetComponent<MeshFilter>(out MeshFilter meshFilter)
+                && meshFilter.sharedMesh != null)
+            {
+                Bounds meshBounds = meshFilter.sharedMesh.bounds;
+                return new Vector3(
+                    meshBounds.extents.x,
+                    ScaledLocalFeet(DeckVisualThicknessFeet * 0.5f),
+                    meshBounds.extents.z);
+            }
+
+            BoxCollider box = deck.GetComponent<BoxCollider>();
+            if (box != null)
+                return Vector3.Scale(box.size, deck.lossyScale) * 0.5f;
+
+            return new Vector3(2.4f, 0.2f, 5.5f);
+        }
+
+        static bool TryFindHullWoodMeshFilter(GameObject boat, out MeshFilter meshFilter)
+        {
+            meshFilter = null;
+            MeshFilter best = null;
+            int bestVertexCount = 0;
+
+            foreach (MeshFilter candidate in boat.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (candidate.sharedMesh == null)
+                    continue;
+
+                string name = candidate.gameObject.name;
+                if (name.IndexOf("Sail", System.StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Oar", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    continue;
+                }
+
+                int vertexCount = candidate.sharedMesh.vertexCount;
+                if (vertexCount > bestVertexCount)
+                {
+                    best = candidate;
+                    bestVertexCount = vertexCount;
+                }
+            }
+
+            meshFilter = best;
+            return meshFilter != null;
+        }
+
+        static bool TrySliceHullDeckPolygon(
+            MeshFilter meshFilter,
+            Transform boatRoot,
+            float floorLocalY,
+            out List<Vector2> polygon)
+        {
+            polygon = new List<Vector2>();
+            Mesh mesh = meshFilter.sharedMesh;
+            Transform meshTransform = meshFilter.transform;
+            Vector3[] vertices = mesh.vertices;
+            int[] triangles = mesh.triangles;
+            var points = new Dictionary<long, Vector2>();
+            var edges = new List<(long a, long b)>();
+
+            for (int i = 0; i < triangles.Length; i += 3)
+            {
+                Vector3 v0 = boatRoot.InverseTransformPoint(meshTransform.TransformPoint(vertices[triangles[i]]));
+                Vector3 v1 = boatRoot.InverseTransformPoint(meshTransform.TransformPoint(vertices[triangles[i + 1]]));
+                Vector3 v2 = boatRoot.InverseTransformPoint(meshTransform.TransformPoint(vertices[triangles[i + 2]]));
+                TryAddTrianglePlaneSegment(v0, v1, v2, floorLocalY, points, edges);
+            }
+
+            if (edges.Count < 3)
+                return false;
+
+            polygon = ChainLargestLoop(points, edges);
+            if (polygon == null || polygon.Count < 3)
+                return false;
+
+            EnsureCounterClockwiseWinding(polygon);
+            return true;
+        }
+
+        static void TryAddTrianglePlaneSegment(
+            Vector3 v0,
+            Vector3 v1,
+            Vector3 v2,
+            float planeY,
+            Dictionary<long, Vector2> points,
+            List<(long a, long b)> edges)
+        {
+            var hits = new List<long>(2);
+            TryCollectPlaneHit(v0, v1, planeY, points, hits);
+            TryCollectPlaneHit(v1, v2, planeY, points, hits);
+            TryCollectPlaneHit(v2, v0, planeY, points, hits);
+
+            for (int i = hits.Count - 1; i >= 0; i--)
+            {
+                for (int j = i - 1; j >= 0; j--)
+                {
+                    if (hits[i] != hits[j])
+                        continue;
+
+                    hits.RemoveAt(i);
+                    break;
+                }
+            }
+
+            if (hits.Count != 2 || hits[0] == hits[1])
+                return;
+
+            edges.Add((hits[0], hits[1]));
+        }
+
+        static void TryCollectPlaneHit(
+            Vector3 a,
+            Vector3 b,
+            float planeY,
+            Dictionary<long, Vector2> points,
+            List<long> hits)
+        {
+            if (Mathf.Abs(a.y - b.y) < 0.00001f)
+                return;
+
+            if ((a.y - planeY) * (b.y - planeY) > 0f)
+                return;
+
+            float t = (planeY - a.y) / (b.y - a.y);
+            if (t < -0.001f || t > 1.001f)
+                return;
+
+            Vector3 hit = Vector3.Lerp(a, b, Mathf.Clamp01(t));
+            long key = QuantizePlanarKey(hit.x, hit.z);
+            points[key] = new Vector2(hit.x, hit.z);
+            hits.Add(key);
+        }
+
+        static List<Vector2> ChainLargestLoop(Dictionary<long, Vector2> points, List<(long a, long b)> edges)
+        {
+            var adjacency = new Dictionary<long, List<long>>();
+            foreach ((long a, long b) in edges)
+            {
+                AddLoopAdjacency(adjacency, a, b);
+                AddLoopAdjacency(adjacency, b, a);
+            }
+
+            var usedEdges = new HashSet<(long, long)>();
+            List<Vector2> bestLoop = null;
+            float bestArea = 0f;
+
+            foreach ((long a, long b) in edges)
+            {
+                (long, long) edgeKey = UndirectedEdgeKey(a, b);
+                if (usedEdges.Contains(edgeKey))
+                    continue;
+
+                if (!TryWalkLoop(a, b, adjacency, points, usedEdges, out List<Vector2> loop))
+                    continue;
+
+                float area = Mathf.Abs(ComputeSignedArea2D(loop));
+                if (area <= bestArea)
+                    continue;
+
+                bestArea = area;
+                bestLoop = loop;
+            }
+
+            return bestLoop;
+        }
+
+        static void AddLoopAdjacency(Dictionary<long, List<long>> adjacency, long a, long b)
+        {
+            if (!adjacency.TryGetValue(a, out List<long> neighbors))
+            {
+                neighbors = new List<long>(2);
+                adjacency[a] = neighbors;
+            }
+
+            if (!neighbors.Contains(b))
+                neighbors.Add(b);
+        }
+
+        static (long, long) UndirectedEdgeKey(long a, long b) => a < b ? (a, b) : (b, a);
+
+        static bool TryWalkLoop(
+            long start,
+            long firstNext,
+            Dictionary<long, List<long>> adjacency,
+            Dictionary<long, Vector2> points,
+            HashSet<(long, long)> usedEdges,
+            out List<Vector2> loop)
+        {
+            loop = new List<Vector2> { points[start] };
+            long previous = start;
+            long current = firstNext;
+            int guard = adjacency.Count + 4;
+
+            while (guard-- > 0)
+            {
+                loop.Add(points[current]);
+                usedEdges.Add(UndirectedEdgeKey(previous, current));
+
+                if (current == start)
+                    return loop.Count >= 3;
+
+                if (!adjacency.TryGetValue(current, out List<long> neighbors))
+                    break;
+
+                long next = -1;
+                for (int i = 0; i < neighbors.Count; i++)
+                {
+                    long candidate = neighbors[i];
+                    if (candidate == previous)
+                        continue;
+
+                    if (usedEdges.Contains(UndirectedEdgeKey(current, candidate)))
+                        continue;
+
+                    next = candidate;
+                    break;
+                }
+
+                if (next == -1)
+                    break;
+
+                previous = current;
+                current = next;
+            }
+
+            loop = null;
+            return false;
+        }
+
+        static float ComputeSignedArea2D(IReadOnlyList<Vector2> polygon)
+        {
+            double area = 0d;
+            for (int i = 0; i < polygon.Count; i++)
+            {
+                Vector2 a = polygon[i];
+                Vector2 b = polygon[(i + 1) % polygon.Count];
+                area += (double)a.x * b.y - (double)b.x * a.y;
+            }
+
+            return (float)(area * 0.5d);
+        }
+
+        static void EnsureCounterClockwiseWinding(List<Vector2> polygon)
+        {
+            if (ComputeSignedArea2D(polygon) < 0f)
+                polygon.Reverse();
+        }
+
+        static long QuantizePlanarKey(float x, float z)
+        {
+            int qx = Mathf.RoundToInt(x * 8000f);
+            int qz = Mathf.RoundToInt(z * 8000f);
+            return ((long)qx << 32) ^ (uint)qz;
+        }
+
+        static Mesh BuildSolidExtrudedDeckMesh(IReadOnlyList<Vector2> polygon, float topLocalY, float thickness)
+        {
+            if (polygon == null || polygon.Count < 3 || thickness <= 0.0001f)
+                return null;
+
+            float bottomLocalY = topLocalY - thickness;
+            int count = polygon.Count;
+            var vertices = new Vector3[count * 2];
+            var triangles = new List<int>(count * 6);
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector2 p = polygon[i];
+                vertices[i] = new Vector3(p.x, topLocalY, p.y);
+                vertices[count + i] = new Vector3(p.x, bottomLocalY, p.y);
+            }
+
+            for (int i = 1; i < count - 1; i++)
+            {
+                triangles.Add(0);
+                triangles.Add(i);
+                triangles.Add(i + 1);
+            }
+
+            for (int i = 1; i < count - 1; i++)
+            {
+                triangles.Add(count);
+                triangles.Add(count + i + 1);
+                triangles.Add(count + i);
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                int next = (i + 1) % count;
+                int topA = i;
+                int topB = next;
+                int bottomA = count + i;
+                int bottomB = count + next;
+                triangles.Add(topA);
+                triangles.Add(topB);
+                triangles.Add(bottomB);
+                triangles.Add(topA);
+                triangles.Add(bottomB);
+                triangles.Add(bottomA);
+            }
+
+            var mesh = new Mesh { name = "BoatWalkDeckMesh" };
+            mesh.vertices = vertices;
+            mesh.triangles = triangles.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        static void AddWalkDeckColliders(
+            Transform walkDeckRoot,
+            IReadOnlyList<Vector2> polygon,
+            float localY,
+            float cellSize,
+            float deckThickness)
+        {
+            var collisionRoot = new GameObject("WalkDeckCollision");
+            collisionRoot.transform.SetParent(walkDeckRoot, false);
+            collisionRoot.transform.localPosition = Vector3.zero;
+            collisionRoot.transform.localRotation = Quaternion.identity;
+            collisionRoot.transform.localScale = Vector3.one;
+
+            GetPolygonBounds(polygon, out float minX, out float maxX, out float minZ, out float maxZ);
+            for (float x = minX; x < maxX; x += cellSize)
+            {
+                for (float z = minZ; z < maxZ; z += cellSize)
+                {
+                    if (!CellIntersectsPolygon(x, z, cellSize, polygon))
+                        continue;
+
+                    Vector2 center = new Vector2(x + cellSize * 0.5f, z + cellSize * 0.5f);
+                    var cell = new GameObject("WalkDeckCell");
+                    cell.transform.SetParent(collisionRoot.transform, false);
+                    cell.transform.localPosition = new Vector3(center.x, localY - deckThickness * 0.5f, center.y);
+                    cell.transform.localRotation = Quaternion.identity;
+                    cell.transform.localScale = Vector3.one;
+
+                    var box = cell.AddComponent<BoxCollider>();
+                    box.size = new Vector3(cellSize, deckThickness, cellSize);
+                }
+            }
+        }
+
+        static void GetPolygonBounds(IReadOnlyList<Vector2> polygon, out float minX, out float maxX, out float minZ, out float maxZ)
+        {
+            minX = float.PositiveInfinity;
+            maxX = float.NegativeInfinity;
+            minZ = float.PositiveInfinity;
+            maxZ = float.NegativeInfinity;
+            for (int i = 0; i < polygon.Count; i++)
+            {
+                minX = Mathf.Min(minX, polygon[i].x);
+                maxX = Mathf.Max(maxX, polygon[i].x);
+                minZ = Mathf.Min(minZ, polygon[i].y);
+                maxZ = Mathf.Max(maxZ, polygon[i].y);
+            }
+        }
+
+        static bool CellIntersectsPolygon(float x, float z, float cellSize, IReadOnlyList<Vector2> polygon)
+        {
+            if (IsPointInPolygon(new Vector2(x + cellSize * 0.5f, z + cellSize * 0.5f), polygon))
+                return true;
+
+            return IsPointInPolygon(new Vector2(x, z), polygon)
+                || IsPointInPolygon(new Vector2(x + cellSize, z), polygon)
+                || IsPointInPolygon(new Vector2(x + cellSize, z + cellSize), polygon)
+                || IsPointInPolygon(new Vector2(x, z + cellSize), polygon);
+        }
+
+        static bool IsPointInPolygon(Vector2 point, IReadOnlyList<Vector2> polygon)
+        {
+            bool inside = false;
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                Vector2 a = polygon[i];
+                Vector2 b = polygon[j];
+                bool intersects = (a.y > point.y) != (b.y > point.y)
+                    && point.x < (b.x - a.x) * (point.y - a.y) / ((b.y - a.y) + 0.000001f) + a.x;
+                if (intersects)
+                    inside = !inside;
+            }
+
+            return inside;
+        }
+
+        static Material CreateBoatDeckMaterial(Color sailColor)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+                shader = Shader.Find("Unlit/Color");
+
+            var mat = shader != null
+                ? new Material(shader)
+                : PrimitiveFactory.CreateColorMaterial(sailColor, 0.06f);
+            mat.name = "BoatDeckFloor";
+
+            Color opaqueColor = new Color(sailColor.r, sailColor.g, sailColor.b, 1f);
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", opaqueColor);
+            else
+                mat.color = opaqueColor;
+
+            if (mat.HasProperty("_Surface"))
+                mat.SetFloat("_Surface", 0f);
+            if (mat.HasProperty("_Blend"))
+                mat.SetFloat("_Blend", 0f);
+
+            mat.SetInt("_Cull", (int)CullMode.Off);
+            mat.SetInt("_ZWrite", 1);
+            if (mat.HasProperty("_ZWrite"))
+                mat.SetFloat("_ZWrite", 1f);
+            if (mat.HasProperty("_ZTest"))
+                mat.SetFloat("_ZTest", (float)CompareFunction.LessEqual);
+
+            mat.SetInt("_SrcBlend", (int)BlendMode.One);
+            mat.SetInt("_DstBlend", (int)BlendMode.Zero);
+            mat.renderQueue = DeckRenderQueue;
+            mat.SetOverrideTag("RenderType", "Opaque");
+            mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.DisableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            return mat;
+        }
+
+        static void EnsureDeckRendersAboveHullAndWater(GameObject boat)
+        {
+            foreach (var renderer in boat.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null)
+                    continue;
+
+                string name = renderer.gameObject.name;
+                if (name == "BoatDeckFloor" || name == "BoatDeckCap" || name == "BoatWalkDeck")
+                    continue;
+
+                var materials = renderer.materials;
+                bool changed = false;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    Material material = materials[i];
+                    if (material == null)
+                        continue;
+
+                    material.renderQueue = (int)RenderQueue.Geometry - 1;
+                    changed = true;
+                }
+
+                if (changed)
+                    renderer.materials = materials;
+            }
+        }
+
+        static Color SampleSailDeckColor(GameObject boat)
+        {
+            foreach (var renderer in boat.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || renderer.gameObject.name.IndexOf("Sail", System.StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                var materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    var mat = materials[i];
+                    if (mat == null)
+                        continue;
+
+                    Color color = mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor") : mat.color;
+                    if (color.r + color.g + color.b > 0.25f)
+                        return color;
+                }
+            }
+
+            return SailDeckFallbackColor;
+        }
+
+        static void AddInteractTrigger<T>(Transform parent, Vector3 localCenter, Vector3 localSize) where T : Component
+        {
+            var go = new GameObject(typeof(T).Name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.identity;
+            var trigger = go.AddComponent<BoxCollider>();
+            trigger.isTrigger = true;
+            trigger.center = localCenter;
+            trigger.size = localSize;
+            go.AddComponent<T>();
+        }
+
+        static float ComputeSternContentZ(GameObject boat, Transform contentRoot, Vector3 bowLocalDirection)
+        {
+            if (!TryGetRendererBounds(boat, out var bounds))
+                return LakeCatalog.GetBeachCenterContentLocal().y;
+
+            Vector3 bowContent = contentRoot.InverseTransformDirection(boat.transform.TransformDirection(bowLocalDirection));
+            bowContent.y = 0f;
+            if (bowContent.sqrMagnitude < 0.0001f)
+                return contentRoot.InverseTransformPoint(bounds.center).z;
+
+            bowContent.Normalize();
+            Vector3 sternContent = contentRoot.InverseTransformPoint(bounds.center);
+            float minAlongBow = float.PositiveInfinity;
+            foreach (Vector3 corner in GetBoundsWorldCorners(bounds))
+            {
+                Vector3 content = contentRoot.InverseTransformPoint(corner);
+                float alongBow = Vector3.Dot(content, bowContent);
+                if (alongBow >= minAlongBow)
+                    continue;
+
+                minAlongBow = alongBow;
+                sternContent = content;
+            }
+
+            return sternContent.z;
+        }
+
+        static Vector3[] GetBoundsWorldCorners(Bounds bounds)
+        {
+            Vector3 c = bounds.center;
+            Vector3 e = bounds.extents;
+            return new[]
+            {
+                c + new Vector3(-e.x, -e.y, -e.z),
+                c + new Vector3(-e.x, -e.y, e.z),
+                c + new Vector3(-e.x, e.y, -e.z),
+                c + new Vector3(-e.x, e.y, e.z),
+                c + new Vector3(e.x, -e.y, -e.z),
+                c + new Vector3(e.x, -e.y, e.z),
+                c + new Vector3(e.x, e.y, -e.z),
+                c + new Vector3(e.x, e.y, e.z),
+            };
+        }
+
+        static Vector3 GetHullBottomCenterWorld(GameObject boat)
+        {
+            if (!TryGetRendererBounds(boat, out var bounds))
+                return boat.transform.position;
+
+            return new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+        }
+
+        static void PreserveHullBottomCenterWorld(GameObject boat, Vector3 anchorBottomCenterWorld)
+        {
+            if (!TryGetRendererBounds(boat, out var bounds))
+                return;
+
+            Vector3 currentBottomCenter = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+            Vector3 offset = anchorBottomCenterWorld - currentBottomCenter;
+            boat.transform.position += new Vector3(offset.x, 0f, offset.z);
+        }
+
+        static float SampleWaterSurfaceWorldY(Transform contentRoot, Vector3 contentLocalPosition)
+        {
+            float plainsBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float waterLocalY = PlainsWorldBuilder.SamplePlainsLocalY(
+                contentLocalPosition.x,
+                contentLocalPosition.z,
+                plainsBase) + LakeCatalog.WaterSurfaceLocalYOffset;
+            return contentRoot.TransformPoint(new Vector3(
+                contentLocalPosition.x,
+                waterLocalY,
+                contentLocalPosition.z)).y;
+        }
+
+        static void AlignHullBottomToSurface(GameObject boat, float surfaceWorldY)
+        {
+            if (!TryGetRendererBounds(boat, out var bounds))
+                return;
+
+            float lift = surfaceWorldY - bounds.min.y;
+            if (Mathf.Abs(lift) > 0.0001f)
+                boat.transform.position += Vector3.up * lift;
+        }
+
+        static void StripImportedColliders(GameObject root)
+        {
+            foreach (var collider in root.GetComponentsInChildren<Collider>(true))
+                Object.Destroy(collider);
+        }
+
+        static bool TryGetRendererBounds(GameObject root, out Bounds bounds)
+        {
+            bounds = default;
+            var renderers = root.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0)
+                return false;
+
+            bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+            {
+                if (renderers[i] == null || !renderers[i].enabled)
+                    continue;
+
+                bounds.Encapsulate(renderers[i].bounds);
+            }
+
+            return true;
+        }
+    }
+}

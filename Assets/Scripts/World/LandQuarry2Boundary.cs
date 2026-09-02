@@ -50,6 +50,73 @@ namespace MonsterMiner.World
             return distance <= SampleEdgeDistance(angle);
         }
 
+        public static bool IsSnowGroundLocal(float localX, float localZ)
+        {
+            if (ContainsLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsBeachLocal(localX, localZ))
+                return false;
+
+            return IsLakeApproachLandLocal(localX, localZ);
+        }
+
+        public static bool IsLakeApproachLandLocal(float localX, float localZ)
+        {
+            if (ContainsLocal(localX, localZ))
+                return false;
+
+            if (LakeBoundary.IsBeachLocal(localX, localZ))
+                return true;
+
+            if (LakeBoundary.ContainsLocal(localX, localZ))
+                return false;
+
+            var lakeCenter = LakeCatalog.GetCenterLocal();
+            float lakeRadius = LakeCatalog.GetNominalRadiusUnits();
+            if (Mathf.Abs(localX - lakeCenter.x) > lakeRadius)
+                return false;
+
+            float beachSouth = LakeCatalog.GetBeachSouthEdgeZ();
+            if (localZ >= beachSouth - WorldScale.Feet(0.5f))
+                return true;
+
+            float lakeSouthZ = SampleLakeSouthShoreLocalZ(localX);
+            if (localZ > lakeSouthZ + WorldScale.Feet(1f))
+                return false;
+
+            float jarlNorthZ = SampleJarlNorthLocalZAtX(localX);
+            return jarlNorthZ > float.NegativeInfinity
+                && localZ >= jarlNorthZ - WorldScale.Feet(0.5f);
+        }
+
+        public static float SampleLakeSouthShoreLocalZ(float localX)
+        {
+            var center = LakeCatalog.GetCenterLocal();
+            float dx = localX - center.x;
+            float radius = LakeCatalog.GetNominalRadiusUnits();
+            if (Mathf.Abs(dx) >= radius)
+                return center.y;
+
+            return center.y - Mathf.Sqrt(radius * radius - dx * dx);
+        }
+
+        public static float SampleJarlNorthLocalZAtX(float localX)
+        {
+            float halfCell = WorldScale.Feet(18f);
+            float bestZ = float.NegativeInfinity;
+            int steps = 360 / SampleStepDegrees;
+            for (int i = 0; i < steps; i++)
+            {
+                float angle = i * SampleStepDegrees * Mathf.Deg2Rad;
+                var edge = GetEdgeLocalPoint(angle);
+                if (Mathf.Abs(edge.x - localX) <= halfCell)
+                    bestZ = Mathf.Max(bestZ, edge.y);
+            }
+
+            return bestZ;
+        }
+
         public static Vector2 GetEdgeLocalPoint(float angleRadians)
         {
             var center = QuarryCatalog.GetLandQuarry2Center();

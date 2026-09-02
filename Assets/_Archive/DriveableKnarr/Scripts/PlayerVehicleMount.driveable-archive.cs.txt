@@ -1,0 +1,521 @@
+using MonsterMiner.Core;
+using MonsterMiner.Util;
+using MonsterMiner.World;
+using UnityEngine;
+
+namespace MonsterMiner.Player
+{
+    [DefaultExecutionOrder(110)]
+    public class PlayerVehicleMount : MonoBehaviour
+    {
+        const float DismountSideOffset = 2.2f;
+        const float CargoDismountSideOffsetFeet = 5f;
+        const float BoatDismountShoreOffsetFeet = 10f;
+        const float BoatDismountInlandOffsetFeet = 6f;
+        const float CargoMoveSpeedMph = 8f;
+        public const float BoatHelmViewPitch = 3f;
+        const float BoatDriverLocalYawDegrees = 0f;
+
+        public enum MountMode
+        {
+            None,
+            Driver,
+            Cargo,
+            BoatDriver,
+            BoatCargo
+        }
+
+        DriveableTruck currentTruck;
+        DriveableBoat currentBoat;
+        ICargoVehicle currentCargo;
+        PlayerController controller;
+        Rigidbody rb;
+        CapsuleCollider bodyCollider;
+        Renderer bodyRenderer;
+        MountMode mode = MountMode.None;
+        float driverHeadYaw;
+        Vector3? boatDeckReturnLocal;
+        RigidbodyInterpolation storedInterpolation;
+
+        public bool IsMounted => mode != MountMode.None;
+        public bool IsDriving => mode == MountMode.Driver || mode == MountMode.BoatDriver;
+        public bool IsDrivingBoat => mode == MountMode.BoatDriver;
+        public bool IsInCargo => mode == MountMode.Cargo;
+        public bool IsInBoatCargo => mode == MountMode.BoatCargo;
+        public DriveableTruck CurrentTruck => currentTruck;
+        public DriveableBoat CurrentBoat => currentBoat;
+        public float DriverHeadYaw => driverHeadYaw;
+
+        public void Initialize()
+        {
+            controller = GetComponent<PlayerController>();
+            rb = GetComponent<Rigidbody>();
+            bodyCollider = GetComponent<CapsuleCollider>();
+            bodyRenderer = GetComponent<Renderer>();
+        }
+
+        public bool TryMountDriver(DriveableTruck truck)
+        {
+            if (truck == null || IsMounted || truck.HasDriver || controller == null || rb == null)
+                return false;
+
+            if (GetComponent<PlayerWingsFlight>()?.IsFlying == true)
+                return false;
+
+            currentTruck = truck;
+            currentBoat = null;
+            currentCargo = null;
+            mode = MountMode.Driver;
+            driverHeadYaw = 0f;
+            truck.SetDriver(this);
+
+            BeginMountedPhysics(truck.HostTransform, truck.CargoBed, ignoreBedCollisions: true);
+
+            if (bodyCollider != null)
+                bodyCollider.enabled = false;
+            if (bodyRenderer != null)
+                bodyRenderer.enabled = false;
+
+            transform.SetParent(truck.Seat, false);
+            AlignDriverCameraToSeat(truck.Seat);
+
+            controller.ResetViewPitch(8f);
+            driverHeadYaw = 0f;
+
+            IndustrialSmallTruckVisualFactory.ApplyEquippedSkin(truck.gameObject);
+            truck.SetDriverViewHidden(true);
+            GameContext.Instance?.Hud?.ShowMessage("W to throttle, S to brake/reverse. [E] to get out front.");
+            GameContext.Instance?.Hud?.ShowCenterMessage("Avoid the rocks!");
+            return true;
+        }
+
+        public bool TryMountBoatDriver(DriveableBoat boat)
+        {
+            if (boat == null || IsMounted || boat.HasDriver || controller == null || rb == null)
+                return false;
+
+            if (GetComponent<PlayerWingsFlight>()?.IsFlying == true)
+                return false;
+
+            currentBoat = boat;
+            currentTruck = null;
+            currentCargo = null;
+            mode = MountMode.BoatDriver;
+            driverHeadYaw = 0f;
+            boat.SetDriver(this);
+
+            BeginMountedPhysics(boat.HostTransform, boat.CargoBed, ignoreBedCollisions: true);
+
+            if (bodyCollider != null)
+                bodyCollider.enabled = false;
+            if (bodyRenderer != null)
+                bodyRenderer.enabled = false;
+
+            transform.SetParent(boat.Helm, false);
+            AlignBoatDriverToHelm(boat.Helm);
+
+            controller.ResetViewPitch(BoatHelmViewPitch);
+            driverHeadYaw = 0f;
+            GameContext.Instance?.Hud?.ShowMessage(
+                "W throttle forward (max 25 mph). S reverse at stop (max 5 mph). A/D steer. Space brake. [E] Stop Sailing.",
+                bottomOffsetFromScreen: 170f);
+            return true;
+        }
+
+        public bool TryMountBoatDriverFromDeck(DriveableBoat boat)
+        {
+            if (boat == null || !IsInBoatCargo || currentBoat != boat || boat.HasDriver || controller == null || rb == null)
+                return false;
+
+            if (GetComponent<PlayerWingsFlight>()?.IsFlying == true)
+                return false;
+
+            boatDeckReturnLocal = transform.localPosition;
+            currentBoat = boat;
+            boat.ClearCargoOccupant(this);
+            currentCargo = null;
+            currentTruck = null;
+            mode = MountMode.BoatDriver;
+            driverHeadYaw = 0f;
+            boat.SetDriver(this);
+
+            BeginMountedPhysics(boat.HostTransform, boat.CargoBed, ignoreBedCollisions: true);
+
+            if (bodyCollider != null)
+                bodyCollider.enabled = false;
+            if (bodyRenderer != null)
+                bodyRenderer.enabled = false;
+
+            transform.SetParent(boat.Helm, false);
+            AlignBoatDriverToHelm(boat.Helm);
+            Physics.SyncTransforms();
+            rb.position = transform.position;
+            rb.rotation = transform.rotation;
+
+            controller.ResetViewPitch(BoatHelmViewPitch);
+            driverHeadYaw = 0f;
+            GameContext.Instance?.Hud?.ShowMessage(
+                "W throttle forward (max 25 mph). S reverse at stop (max 5 mph). A/D steer. Space brake. [E] Stop Sailing.",
+                bottomOffsetFromScreen: 170f);
+            return true;
+        }
+
+        public bool TryReturnBoatDriverToDeck(DriveableBoat boat)
+        {
+            if (boat == null || !IsDrivingBoat || currentBoat != boat || controller == null || rb == null)
+                return false;
+
+            if (!boat.CanDismount)
+            {
+                GameContext.Instance?.Hud?.ShowMessage("Slow down before stopping sail.");
+                return false;
+            }
+
+            boat.ClearDriver(this);
+            currentCargo = boat;
+            currentTruck = null;
+            mode = MountMode.BoatCargo;
+            driverHeadYaw = 0f;
+            boat.SetCargoOccupant(this);
+
+            SetIgnoreHostCollisions(boat.HostTransform, boat.CargoBed, true, ignoreBedColliders: false);
+
+            if (bodyRenderer != null)
+                bodyRenderer.enabled = false;
+
+            rb.isKinematic = true;
+            rb.detectCollisions = false;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+
+            transform.SetParent(boat.CargoBed, false);
+            Vector3 deckLocal = boatDeckReturnLocal ?? boat.CargoBed.InverseTransformPoint(boat.Helm.position);
+            boatDeckReturnLocal = null;
+            deckLocal.y = boat.CargoEntryLocalPosition.y;
+            deckLocal = boat.ClampCargoLocalPosition(deckLocal);
+            transform.localPosition = deckLocal;
+            transform.localRotation = Quaternion.identity;
+            Physics.SyncTransforms();
+            rb.position = transform.position;
+            rb.rotation = transform.rotation;
+
+            if (bodyCollider != null)
+                bodyCollider.enabled = false;
+
+            if (controller.Head != null)
+                controller.Head.localRotation = Quaternion.identity;
+
+            controller.ResetViewPitch();
+            GameContext.Instance?.Hud?.ShowMessage("Move around the deck. [E] to get off ship.");
+            return true;
+        }
+
+        public bool TryMountCargo(DriveableTruck truck)
+        {
+            return TryMountCargoVehicle(truck);
+        }
+
+        public bool TryMountBoatCargo(DriveableBoat boat)
+        {
+            return TryMountCargoVehicle(boat);
+        }
+
+        bool TryMountCargoVehicle(ICargoVehicle vehicle)
+        {
+            if (vehicle == null || IsMounted || vehicle.HasCargoOccupant || controller == null || rb == null)
+                return false;
+
+            if (GetComponent<PlayerWingsFlight>()?.IsFlying == true)
+                return false;
+
+            currentTruck = vehicle as DriveableTruck;
+            currentBoat = vehicle as DriveableBoat;
+            currentCargo = vehicle;
+            mode = currentBoat != null ? MountMode.BoatCargo : MountMode.Cargo;
+            vehicle.SetCargoOccupant(this);
+
+            BeginMountedPhysics(vehicle.HostTransform, vehicle.CargoBed, ignoreBedCollisions: false);
+
+            if (bodyCollider != null)
+                bodyCollider.enabled = false;
+            if (bodyRenderer != null)
+                bodyRenderer.enabled = currentBoat == null;
+
+            transform.SetParent(vehicle.CargoBed, false);
+            transform.localPosition = vehicle.ClampCargoLocalPosition(vehicle.CargoEntryLocalPosition);
+            transform.localRotation = Quaternion.identity;
+            Physics.SyncTransforms();
+            rb.position = transform.position;
+            rb.rotation = transform.rotation;
+
+            if (controller.Head != null)
+                controller.Head.localRotation = Quaternion.identity;
+
+            controller.ResetViewPitch();
+            if (currentTruck != null)
+                IndustrialSmallTruckVisualFactory.ApplyEquippedSkin(currentTruck.gameObject);
+
+            GameContext.Instance?.Hud?.ShowMessage(
+                currentBoat != null
+                    ? "Move around the deck. [E] to get off ship."
+                    : "Move around the bed. [E] to get out back.");
+            return true;
+        }
+
+        public bool TryDismount()
+        {
+            if (!IsMounted)
+                return false;
+
+            if (IsDrivingBoat && currentBoat != null)
+                return TryReturnBoatDriverToDeck(currentBoat);
+
+            if (IsDriving && currentTruck != null && !currentTruck.CanDismount)
+            {
+                GameContext.Instance?.Hud?.ShowMessage("Slow down before getting out front.");
+                return false;
+            }
+
+            return CompleteDismount();
+        }
+
+        public void ForceDismount()
+        {
+            if (!IsMounted)
+                return;
+
+            CompleteDismount();
+        }
+
+        public void AddDriverHeadYaw(float deltaDegrees)
+        {
+            driverHeadYaw = Mathf.Clamp(driverHeadYaw + deltaDegrees, -75f, 75f);
+        }
+
+        void BeginMountedPhysics(Transform host, Transform cargoBed, bool ignoreBedCollisions)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            storedInterpolation = rb.interpolation;
+            rb.interpolation = RigidbodyInterpolation.None;
+            rb.isKinematic = true;
+            rb.detectCollisions = false;
+            SetIgnoreHostCollisions(host, cargoBed, true, ignoreBedCollisions);
+        }
+
+        void AlignDriverCameraToSeat(Transform seat)
+        {
+            if (seat == null)
+                return;
+
+            Vector3 headLocal = controller != null && controller.Head != null
+                ? controller.Head.localPosition
+                : new Vector3(0f, 0.65f, 0f);
+            transform.localPosition = -headLocal;
+            transform.localRotation = Quaternion.identity;
+        }
+
+        void AlignBoatDriverToHelm(Transform helm)
+        {
+            AlignDriverCameraToSeat(helm);
+            transform.localRotation = Quaternion.Euler(0f, BoatDriverLocalYawDegrees, 0f);
+        }
+
+        void LateUpdate()
+        {
+            if (IsDrivingBoat && currentBoat != null)
+            {
+                AlignBoatDriverToHelm(currentBoat.Helm);
+                controller?.ResetViewPitch(BoatHelmViewPitch);
+                return;
+            }
+
+            if (IsDriving && currentTruck != null)
+            {
+                AlignDriverCameraToSeat(currentTruck.Seat);
+                return;
+            }
+
+            if (currentCargo == null || (!IsInCargo && !IsInBoatCargo))
+                return;
+
+            var stand = currentCargo.CargoEntryLocalPosition;
+            var local = transform.localPosition;
+            Vector3 clamped = currentCargo.ClampCargoLocalPosition(local);
+            if ((clamped - local).sqrMagnitude > 0.000001f || Mathf.Abs(local.y - stand.y) > 0.001f)
+                transform.localPosition = new Vector3(clamped.x, stand.y, clamped.z);
+        }
+
+        void FixedUpdate()
+        {
+            if (IsDriving || IsDrivingBoat)
+                return;
+
+            if (currentCargo == null || controller == null || (!IsInCargo && !IsInBoatCargo))
+                return;
+
+            var input = new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical"));
+            if (input.sqrMagnitude < 0.0001f)
+                return;
+
+            if (input.sqrMagnitude > 1f)
+                input.Normalize();
+
+            Transform bed = currentCargo.CargoBed;
+            Vector3 worldMove = transform.TransformDirection(new Vector3(input.x, 0f, input.z));
+            Vector3 localMove = bed.InverseTransformDirection(worldMove) * WorldScale.MilesPerHour(CargoMoveSpeedMph) * Time.fixedDeltaTime;
+            Vector3 nextLocal = transform.localPosition + localMove;
+            nextLocal = currentCargo.ClampCargoLocalPosition(nextLocal);
+            nextLocal.y = currentCargo.CargoEntryLocalPosition.y;
+            transform.localPosition = nextLocal;
+        }
+
+        bool CompleteDismount()
+        {
+            var truck = currentTruck;
+            var boat = currentBoat;
+            var cargo = currentCargo;
+            bool exitedFront = mode == MountMode.Driver;
+            bool exitedHelm = mode == MountMode.BoatDriver;
+            bool exitedCargo = mode == MountMode.Cargo || mode == MountMode.BoatCargo;
+
+            currentTruck = null;
+            currentBoat = null;
+            currentCargo = null;
+            mode = MountMode.None;
+            driverHeadYaw = 0f;
+            boatDeckReturnLocal = null;
+
+            if (exitedFront && truck != null)
+                truck.ClearDriver(this);
+            else if (exitedHelm && boat != null)
+                boat.ClearDriver(this);
+            else if (exitedCargo && cargo != null)
+                cargo.ClearCargoOccupant(this);
+
+            if (exitedFront && truck != null)
+                truck.SetDriverViewHidden(false);
+
+            Transform host = truck != null ? truck.HostTransform : boat != null ? boat.HostTransform : cargo?.HostTransform;
+            Vector3 dismountWorldPosition;
+            Vector3 lookDirection;
+            Vector3 mountedWorldPosition = transform.position;
+
+            if (exitedFront && truck != null)
+            {
+                lookDirection = truck.transform.forward;
+                dismountWorldPosition = truck.transform.position
+                    - truck.transform.right * DismountSideOffset
+                    + Vector3.up * 0.5f;
+            }
+            else if (exitedHelm && boat != null)
+            {
+                lookDirection = boat.Helm != null ? boat.Helm.forward : boat.BowForwardWorld;
+                dismountWorldPosition = ResolveBoatShoreDismountWorld(mountedWorldPosition, boat.BowForwardWorld);
+            }
+            else if (exitedCargo && boat != null)
+            {
+                lookDirection = boat.BowForwardWorld;
+                dismountWorldPosition = ResolveBoatShoreDismountWorld(mountedWorldPosition, boat.BowForwardWorld);
+            }
+            else if (exitedCargo && host != null)
+            {
+                lookDirection = host.forward;
+                dismountWorldPosition = mountedWorldPosition
+                    - host.right * WorldScale.Feet(CargoDismountSideOffsetFeet);
+            }
+            else
+            {
+                lookDirection = transform.forward;
+                dismountWorldPosition = transform.position;
+            }
+
+            transform.SetParent(null, true);
+
+            if (controller != null)
+                dismountWorldPosition = controller.SnapToFloorWorld(dismountWorldPosition);
+
+            transform.position = dismountWorldPosition;
+            transform.rotation = Quaternion.LookRotation(lookDirection, Vector3.up);
+
+            rb.detectCollisions = true;
+            rb.isKinematic = false;
+            rb.interpolation = storedInterpolation;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+            rb.position = transform.position;
+            rb.rotation = transform.rotation;
+
+            if (host != null)
+                SetIgnoreHostCollisions(host, cargo?.CargoBed, false, ignoreBedColliders: true);
+
+            if (bodyCollider != null)
+                bodyCollider.enabled = true;
+            if (bodyRenderer != null)
+                bodyRenderer.enabled = false;
+
+            if (controller?.Head != null)
+                controller.Head.localRotation = Quaternion.identity;
+
+            controller?.ResetViewPitch();
+            return true;
+        }
+
+        Vector3 ResolveBoatShoreDismountWorld(Vector3 mountedWorldPosition, Vector3 bowForwardWorld)
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds == null)
+                return mountedWorldPosition;
+
+            Vector3 towardShore = bowForwardWorld;
+            towardShore.y = 0f;
+            if (towardShore.sqrMagnitude > 0.0001f)
+                towardShore = -towardShore.normalized;
+            else
+                towardShore = Vector3.back;
+
+            Vector3 worldPos = mountedWorldPosition + towardShore * WorldScale.Feet(BoatDismountShoreOffsetFeet);
+            Vector3 local = bounds.transform.InverseTransformPoint(worldPos);
+
+            if (LakeCatalog.IsOpenWaterLocal(local.x, local.z))
+            {
+                var shoreLocal = LakeCatalog.GetNearestShoreLocal(local.x, local.z);
+                worldPos = bounds.transform.TransformPoint(new Vector3(shoreLocal.x, local.y, shoreLocal.y));
+                worldPos += towardShore * WorldScale.Feet(BoatDismountInlandOffsetFeet);
+            }
+            else if (LandQuarry2Boundary.IsLakeApproachLandLocal(local.x, local.z))
+            {
+                worldPos += towardShore * WorldScale.Feet(BoatDismountInlandOffsetFeet);
+            }
+
+            return worldPos;
+        }
+
+        void SetIgnoreHostCollisions(Transform host, Transform cargoBed, bool ignore, bool ignoreBedColliders = true)
+        {
+            if (host == null)
+                return;
+
+            var hostColliders = host.GetComponentsInChildren<Collider>(true);
+            var playerColliders = GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < hostColliders.Length; i++)
+            {
+                var hostCollider = hostColliders[i];
+                if (hostCollider == null || hostCollider.isTrigger)
+                    continue;
+
+                if (!ignoreBedColliders && cargoBed != null && hostCollider.transform.IsChildOf(cargoBed))
+                    continue;
+
+                for (int j = 0; j < playerColliders.Length; j++)
+                {
+                    if (playerColliders[j] == null)
+                        continue;
+
+                    Physics.IgnoreCollision(hostCollider, playerColliders[j], ignore);
+                }
+            }
+        }
+    }
+}

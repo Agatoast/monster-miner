@@ -8,7 +8,7 @@ using UnityEngine;
 namespace MonsterMiner.Player
 {
     [RequireComponent(typeof(Rigidbody))]
-    public class DriveableTruck : MonoBehaviour
+    public class DriveableTruck : MonoBehaviour, ICargoVehicle
     {
         const float MaxDriveSpeedMph = 50f;
         const float MaxReverseSpeedMph = 10f;
@@ -40,6 +40,7 @@ namespace MonsterMiner.Player
 
         public Transform Seat => seat;
         public Transform CargoBed => cargoBed;
+        public Transform HostTransform => transform;
         public Color BodyColor => bodyColor;
         public Vector3 CargoEntryLocalPosition => new Vector3(0f, cargoBedTopLocalY + WorldScale.CharacterHeightUnits * 0.5f, 0f);
         public bool HasDriver => driver != null;

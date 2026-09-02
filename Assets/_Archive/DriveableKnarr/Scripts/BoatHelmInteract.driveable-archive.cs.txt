@@ -1,0 +1,73 @@
+using MonsterMiner.Core;
+using MonsterMiner.Interaction;
+using UnityEngine;
+
+namespace MonsterMiner.Player
+{
+    public class BoatHelmInteract : MonoBehaviour, IInteractable
+    {
+        DriveableBoat boat;
+
+        public void Initialize(DriveableBoat owner)
+        {
+            boat = owner;
+        }
+
+        public string GetPrompt()
+        {
+            if (boat == null)
+                return string.Empty;
+
+            var mount = GameContext.Instance?.Player?.GetComponent<PlayerVehicleMount>();
+            if (mount != null && mount.IsDrivingBoat && mount.CurrentBoat == boat)
+                return "Stop Sailing [E]";
+
+            return "Sail Ship [E]";
+        }
+
+        public bool CanInteract(GameObject interactor)
+        {
+            if (boat == null || interactor == null)
+                return false;
+
+            var mount = interactor.GetComponent<PlayerVehicleMount>();
+            if (mount == null)
+                return false;
+
+            if (interactor.GetComponent<PlayerWingsFlight>()?.IsFlying == true)
+                return false;
+
+            if (mount.IsDrivingBoat)
+                return mount.CurrentBoat == boat;
+
+            if (mount.IsInBoatCargo)
+                return mount.CurrentBoat == boat && !boat.HasDriver;
+
+            if (mount.IsInCargo || mount.IsDriving)
+                return false;
+
+            return false;
+        }
+
+        public void Interact(GameObject interactor)
+        {
+            if (boat == null)
+                return;
+
+            var mount = interactor.GetComponent<PlayerVehicleMount>();
+            if (mount == null)
+                return;
+
+            if (mount.IsDrivingBoat && mount.CurrentBoat == boat)
+            {
+                mount.TryReturnBoatDriverToDeck(boat);
+                return;
+            }
+
+            if (mount.IsInBoatCargo && mount.CurrentBoat == boat)
+            {
+                mount.TryMountBoatDriverFromDeck(boat);
+            }
+        }
+    }
+}

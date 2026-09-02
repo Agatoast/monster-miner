@@ -50,7 +50,7 @@ namespace MonsterMiner.Util
             float halfDiameter = diameterUnits * 0.5f;
             material.SetFloat("_MaxDist", halfDiameter);
             material.SetFloat("_MaxWaveDist", halfDiameter);
-            material.SetFloat("_Edge_Offset", Mathf.Clamp(halfDiameter * 0.05f, 20f, 120f));
+            material.SetFloat("_Edge_Offset", 0f);
             material.SetFloat("_Displacement_Amount", 0.35f);
             material.SetFloat("_Wave_Speed", 1.4f);
         }

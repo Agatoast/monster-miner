@@ -1,0 +1,206 @@
+using System.Collections.Generic;
+using MonsterMiner.World;
+using UnityEngine;
+
+namespace MonsterMiner.Util
+{
+    public static class BoatHullWaterVisibility
+    {
+        const float ClipMarginFeet = 0.1f;
+        static Shader waterClipShader;
+
+        public static void Apply(GameObject boat, float waterWorldY, ICollection<Renderer> permanentlyHiddenOut)
+        {
+            if (boat == null)
+                return;
+
+            float cutWorldY = waterWorldY + WorldScale.Feet(ClipMarginFeet);
+            var permanentlyHidden = new HashSet<Renderer>();
+
+            foreach (var renderer in boat.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!ShouldProcessHullRenderer(renderer))
+                    continue;
+
+                ApplyShaderWaterClip(renderer, cutWorldY);
+            }
+
+            foreach (var meshFilter in boat.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (!ShouldProcessHullMeshFilter(meshFilter))
+                    continue;
+
+                var renderer = meshFilter.GetComponent<Renderer>();
+                if (renderer == null)
+                    continue;
+
+                if (TryClipMeshBelowWorldY(meshFilter, cutWorldY, out bool hasGeometry) && !hasGeometry)
+                {
+                    renderer.enabled = false;
+                    permanentlyHidden.Add(renderer);
+                }
+            }
+
+            foreach (var renderer in boat.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!ShouldProcessHullRenderer(renderer))
+                    continue;
+
+                if (renderer.enabled && renderer.bounds.max.y < cutWorldY)
+                {
+                    renderer.enabled = false;
+                    permanentlyHidden.Add(renderer);
+                }
+            }
+
+            if (permanentlyHiddenOut != null)
+            {
+                foreach (Renderer renderer in permanentlyHidden)
+                    permanentlyHiddenOut.Add(renderer);
+            }
+        }
+
+        static bool ShouldProcessHullRenderer(Renderer renderer)
+        {
+            if (renderer == null)
+                return false;
+
+            return !IsExcludedBoatVisual(renderer.gameObject.name);
+        }
+
+        static bool ShouldProcessHullMeshFilter(MeshFilter meshFilter)
+        {
+            if (meshFilter == null || meshFilter.sharedMesh == null)
+                return false;
+
+            return !IsExcludedBoatVisual(meshFilter.gameObject.name);
+        }
+
+        static bool IsExcludedBoatVisual(string objectName)
+        {
+            if (string.IsNullOrEmpty(objectName))
+                return false;
+
+            if (objectName.IndexOf("Sail", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || objectName.IndexOf("Oar", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            return objectName == "BoatDeck"
+                || objectName == "BoatWalkDeck"
+                || objectName == "BoatFloorWalkCollider"
+                || objectName == "BoatDeckFloor"
+                || objectName == "BoatDeckCap"
+                || objectName == "BoatHelmSeat";
+        }
+
+        static void ApplyShaderWaterClip(Renderer renderer, float cutWorldY)
+        {
+            Shader clipShader = GetWaterClipShader();
+            if (clipShader == null)
+                return;
+
+            Material[] materials = renderer.materials;
+            bool changed = false;
+
+            for (int i = 0; i < materials.Length; i++)
+            {
+                Material source = materials[i];
+                if (source == null)
+                    continue;
+
+                if (source.shader == clipShader)
+                {
+                    source.SetFloat("_WaterClipWorldY", cutWorldY);
+                    continue;
+                }
+
+                var clipped = new Material(clipShader);
+                CopyMaterialSurface(source, clipped);
+                clipped.SetFloat("_WaterClipWorldY", cutWorldY);
+                materials[i] = clipped;
+                changed = true;
+            }
+
+            if (changed)
+                renderer.materials = materials;
+        }
+
+        static void CopyMaterialSurface(Material source, Material destination)
+        {
+            Texture baseMap = null;
+            if (source.HasProperty("_BaseMap"))
+                baseMap = source.GetTexture("_BaseMap");
+            if (baseMap == null && source.HasProperty("_MainTex"))
+                baseMap = source.GetTexture("_MainTex");
+
+            if (baseMap != null && destination.HasProperty("_BaseMap"))
+                destination.SetTexture("_BaseMap", baseMap);
+
+            Color baseColor = source.HasProperty("_BaseColor")
+                ? source.GetColor("_BaseColor")
+                : source.color;
+            if (destination.HasProperty("_BaseColor"))
+                destination.SetColor("_BaseColor", baseColor);
+
+            if (source.HasProperty("_Smoothness") && destination.HasProperty("_Smoothness"))
+                destination.SetFloat("_Smoothness", source.GetFloat("_Smoothness"));
+        }
+
+        static bool TryClipMeshBelowWorldY(MeshFilter meshFilter, float cutWorldY, out bool hasGeometry)
+        {
+            hasGeometry = false;
+            Mesh source = meshFilter.sharedMesh;
+            if (source == null)
+                return false;
+
+            Transform meshTransform = meshFilter.transform;
+            Vector3[] vertices = source.vertices;
+            int[] triangles = source.triangles;
+            if (triangles.Length == 0)
+                return true;
+
+            var keptTriangles = new List<int>(triangles.Length);
+            for (int i = 0; i < triangles.Length; i += 3)
+            {
+                float y0 = meshTransform.TransformPoint(vertices[triangles[i]]).y;
+                float y1 = meshTransform.TransformPoint(vertices[triangles[i + 1]]).y;
+                float y2 = meshTransform.TransformPoint(vertices[triangles[i + 2]]).y;
+                if (y0 < cutWorldY && y1 < cutWorldY && y2 < cutWorldY)
+                    continue;
+
+                keptTriangles.Add(triangles[i]);
+                keptTriangles.Add(triangles[i + 1]);
+                keptTriangles.Add(triangles[i + 2]);
+            }
+
+            if (keptTriangles.Count == triangles.Length)
+                return true;
+
+            if (keptTriangles.Count == 0)
+                return true;
+
+            hasGeometry = true;
+            var clippedMesh = Object.Instantiate(source);
+            clippedMesh.name = source.name + "_WaterClipped";
+            clippedMesh.triangles = keptTriangles.ToArray();
+            clippedMesh.RecalculateBounds();
+            clippedMesh.RecalculateNormals();
+            meshFilter.mesh = clippedMesh;
+            return true;
+        }
+
+        static Shader GetWaterClipShader()
+        {
+            if (waterClipShader != null)
+                return waterClipShader;
+
+            waterClipShader = Shader.Find("MonsterMiner/BoatHullWaterClip");
+            if (waterClipShader == null)
+                Debug.LogWarning("Monster Miner: BoatHullWaterClip shader not found. Hull shader clipping skipped.");
+
+            return waterClipShader;
+        }
+    }
+}

@@ -291,9 +291,9 @@ namespace MonsterMiner.UI
 
         static void DrawSlotNumber(Rect rect, int number)
         {
-            var numberRect = new Rect(rect.x + 4f, rect.y + rect.height - 22f, 26f, 18f);
+            var numberRect = new Rect(rect.x + 4f, rect.y + 4f, 26f, 18f);
             var style = GetNumberStyle();
-            style.alignment = TextAnchor.LowerLeft;
+            style.alignment = TextAnchor.UpperLeft;
             style.normal.textColor = Color.black;
             GUI.color = Color.black;
             GUI.Label(numberRect, number.ToString(), style);

@@ -10,10 +10,10 @@ namespace MonsterMiner.Combat
             weaponId = Inventory.InventorySystem.ResolveBaseWeaponId(weaponId);
             config = weaponId switch
             {
-                "pistol" => new RangedWeaponConfig(25f, 9, false, 1),
-                "rifle" => new RangedWeaponConfig(200f, 5, false, 1),
-                "shotgun" => new RangedWeaponConfig(30f, 5, true, 1),
-                "machinegun" => new RangedWeaponConfig(40f, 30, false, 3),
+                "pistol" => new RangedWeaponConfig(25f, 9, false, 1, 1f),
+                "rifle" => new RangedWeaponConfig(200f, 5, false, 1, 2f),
+                "shotgun" => new RangedWeaponConfig(30f, 5, true, 1, 3f),
+                "machinegun" => new RangedWeaponConfig(40f, 30, false, 3, 3f),
                 _ => default
             };
 
@@ -27,13 +27,20 @@ namespace MonsterMiner.Combat
         public readonly int MagazineSize;
         public readonly bool HitsAllInView;
         public readonly int RoundsPerTrigger;
+        public readonly float RecoilDegrees;
 
-        public RangedWeaponConfig(float damagePerShot, int magazineSize, bool hitsAllInView, int roundsPerTrigger)
+        public RangedWeaponConfig(
+            float damagePerShot,
+            int magazineSize,
+            bool hitsAllInView,
+            int roundsPerTrigger,
+            float recoilDegrees)
         {
             DamagePerShot = damagePerShot;
             MagazineSize = magazineSize;
             HitsAllInView = hitsAllInView;
             RoundsPerTrigger = roundsPerTrigger;
+            RecoilDegrees = recoilDegrees;
         }
 
         public bool IsValid => MagazineSize > 0 && RoundsPerTrigger > 0;

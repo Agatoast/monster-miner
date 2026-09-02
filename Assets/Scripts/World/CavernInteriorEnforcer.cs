@@ -87,7 +87,8 @@ namespace MonsterMiner.World
             return renderer.GetComponentInParent<MonsterEgg>() != null
                 || renderer.GetComponentInParent<WorldPickup>() != null
                 || renderer.GetComponentInParent<EggFinderMarker>() != null
-                || renderer.GetComponentInParent<DriveableTruck>() != null;
+                || renderer.GetComponentInParent<DriveableTruck>() != null
+                || renderer.GetComponentInParent<DriveableBoat>() != null;
         }
 
         static bool IsShellRenderer(Renderer renderer)
@@ -103,7 +104,7 @@ namespace MonsterMiner.World
                     || name == "PlainsGround" || name == "PlainsGroundCollision"
                     || name == "PlainsTreeCopses" || name == "PlainsRocks" || name == "CliffWalls"
                     || name == "PlateauCliffWalls" || name == "PlayerTruck" || name == "JarlLand" || name == "LandQuarry2"
-                    || name == "WarrensonsLake" || name == "LakeWater" || name == "LakeBeach")
+                    || name == "WarrensonsLake" || name == "LakeWater" || name == "LakeBeach" || name == "LakeIsland" || name == "BoatAnchor" || name == "WarrensonsBoat")
                     return true;
                 if (name.StartsWith("PlainsGroundCollider_") || name.StartsWith("Tree_") || name.StartsWith("Copse_")
                     || name.StartsWith("Trunk") || name.StartsWith("Foliage") || name.StartsWith("LandChunk_")

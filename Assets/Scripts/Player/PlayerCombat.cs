@@ -127,11 +127,20 @@ namespace MonsterMiner.Player
             if (config.HitsAllInView)
             {
                 PerformShotgunAttack(damage);
+                ApplyWeaponRecoil(config.RecoilDegrees);
                 return;
             }
 
             for (int i = 0; i < shotsFired; i++)
+            {
                 PerformSingleShotAttack(damage);
+                ApplyWeaponRecoil(config.RecoilDegrees);
+            }
+        }
+
+        void ApplyWeaponRecoil(float degrees)
+        {
+            controller?.ApplyViewRecoil(degrees);
         }
 
         void PerformSingleShotAttack(float damage)

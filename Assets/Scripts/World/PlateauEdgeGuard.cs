@@ -19,6 +19,9 @@ namespace MonsterMiner.World
 
         void Update()
         {
+            if (IsMountedOnVehicle())
+                return;
+
             if (!TryGetLocalPosition(out var local) || IsOnPlains(bounds, local))
                 return;
 
@@ -28,6 +31,9 @@ namespace MonsterMiner.World
 
         void FixedUpdate()
         {
+            if (IsMountedOnVehicle())
+                return;
+
             if (!TryGetLocalPosition(out var local) || IsOnPlains(bounds, local))
                 return;
 
@@ -104,6 +110,12 @@ namespace MonsterMiner.World
 
             Vector3 world = bounds.transform.TransformPoint(local);
             return PlainsGroundSupport.IsOnPlains(bounds, world);
+        }
+
+        bool IsMountedOnVehicle()
+        {
+            var mount = GetComponent<Player.PlayerVehicleMount>();
+            return mount != null && mount.IsMounted;
         }
     }
 }

@@ -19,6 +19,8 @@ namespace MonsterMiner.World
         static Material snowMaterial;
         static Material waterMaterial;
         static Material sandMaterial;
+        static Material shoreGroundOccluderMaterial;
+        static Material beachSandVisualMaterial;
         static Material vistaCanopyMaterial;
         static Material unlitVistaCanopyMaterial;
         static Material unlitPlainsMaterial;
@@ -155,16 +157,20 @@ namespace MonsterMiner.World
 
         public static Material GetSnowMaterial()
         {
-            if (snowMaterial != null)
-                Object.Destroy(snowMaterial);
+            if (snowMaterial == null)
+                snowMaterial = CreateSnowMaterial();
+            else
+                EnsureOpaque(snowMaterial);
 
-            snowMaterial = CreateSnowMaterial();
             return snowMaterial;
         }
 
         static Material CreateSnowMaterial()
         {
-            var mat = CreateUnlitMaterial(Color.white, "QuarrySnow");
+            var mat = new Material(GetLitTemplate())
+            {
+                name = "QuarrySnow"
+            };
 
             var albedo = Resources.Load<Texture2D>(AntarcticaGroundResourcePath);
             if (albedo == null)
@@ -189,9 +195,15 @@ namespace MonsterMiner.World
             else
                 mat.color = Color.white;
 
-            mat.renderQueue = (int)RenderQueue.Geometry + 1;
+            if (mat.HasProperty("_Smoothness"))
+                mat.SetFloat("_Smoothness", 0.04f);
+            else if (mat.HasProperty("_Glossiness"))
+                mat.SetFloat("_Glossiness", 0.04f);
+
+            EnsureOpaque(mat);
             mat.SetInt("_Cull", (int)CullMode.Off);
             mat.doubleSidedGI = true;
+            mat.renderQueue = (int)RenderQueue.Geometry + 1;
             return mat;
         }
 
@@ -238,6 +250,38 @@ namespace MonsterMiner.World
                 crackStrength: 0.05f);
             sandMaterial.name = "LakeSand";
             return sandMaterial;
+        }
+
+        public static Material GetBeachSandVisualMaterial()
+        {
+            if (beachSandVisualMaterial != null)
+                return beachSandVisualMaterial;
+
+            ColorUtility.TryParseHtmlString("#c8b48a", out var color);
+            beachSandVisualMaterial = CreateUnlitMaterial(color, "BeachSandVisual");
+            beachSandVisualMaterial.SetInt("_Cull", (int)CullMode.Off);
+            if (beachSandVisualMaterial.HasProperty("_Cull"))
+                beachSandVisualMaterial.SetFloat("_Cull", (float)CullMode.Off);
+            return beachSandVisualMaterial;
+        }
+
+        public static Material GetShoreGroundOccluderMaterial()
+        {
+            if (shoreGroundOccluderMaterial != null)
+                return shoreGroundOccluderMaterial;
+
+            ColorUtility.TryParseHtmlString("#c4a882", out var color);
+            shoreGroundOccluderMaterial = CreateStoneMaterial(
+                color,
+                smoothness: 0.02f,
+                seed: 612.4f,
+                tileScale: 3.5f,
+                shadeMin: 0.88f,
+                shadeMax: 1.02f,
+                crackStrength: 0.03f);
+            shoreGroundOccluderMaterial.name = "ShoreGroundOccluder";
+            shoreGroundOccluderMaterial.renderQueue = (int)RenderQueue.Geometry + 5;
+            return shoreGroundOccluderMaterial;
         }
 
         public static Material GetWaterMaterial()
@@ -308,10 +352,54 @@ namespace MonsterMiner.World
             var mat = shader != null ? new Material(shader) : CreateStoneMaterial(color, 0f, 0f, 1f);
             mat.name = materialName;
             if (mat.HasProperty("_BaseColor"))
-                mat.SetColor("_BaseColor", color);
+                mat.SetColor("_BaseColor", new Color(color.r, color.g, color.b, 1f));
             else
-                mat.color = color;
+                mat.color = new Color(color.r, color.g, color.b, 1f);
+
+            EnsureOpaque(mat);
             return mat;
+        }
+
+        static void EnsureOpaque(Material mat)
+        {
+            if (mat == null)
+                return;
+
+            if (mat.HasProperty("_Surface"))
+                mat.SetFloat("_Surface", 0f);
+            if (mat.HasProperty("_Blend"))
+                mat.SetFloat("_Blend", 0f);
+            if (mat.HasProperty("_AlphaClip"))
+                mat.SetFloat("_AlphaClip", 0f);
+
+            mat.renderQueue = mat.renderQueue >= (int)RenderQueue.Geometry
+                && mat.renderQueue < (int)RenderQueue.AlphaTest
+                    ? mat.renderQueue
+                    : (int)RenderQueue.Geometry;
+            mat.SetOverrideTag("RenderType", "Opaque");
+            mat.SetInt("_SrcBlend", (int)BlendMode.One);
+            mat.SetInt("_DstBlend", (int)BlendMode.Zero);
+            mat.SetInt("_ZWrite", 1);
+            if (mat.HasProperty("_ZWrite"))
+                mat.SetFloat("_ZWrite", 1f);
+            if (mat.HasProperty("_ZTest"))
+                mat.SetFloat("_ZTest", (float)CompareFunction.LessEqual);
+
+            mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.DisableKeyword("_ALPHABLEND_ON");
+            mat.EnableKeyword("_SURFACE_TYPE_OPAQUE");
+
+            if (mat.HasProperty("_BaseColor"))
+            {
+                Color baseColor = mat.GetColor("_BaseColor");
+                mat.SetColor("_BaseColor", new Color(baseColor.r, baseColor.g, baseColor.b, 1f));
+            }
+            else if (mat.HasProperty("_Color"))
+            {
+                Color baseColor = mat.GetColor("_Color");
+                mat.SetColor("_Color", new Color(baseColor.r, baseColor.g, baseColor.b, 1f));
+            }
         }
 
         static Material CreateStoneMaterial(
@@ -357,6 +445,7 @@ namespace MonsterMiner.World
             if (mat.HasProperty("_BumpMap"))
                 mat.SetTextureScale("_BumpMap", new Vector2(tileScale, tileScale));
 
+            EnsureOpaque(mat);
             return mat;
         }
 

@@ -147,11 +147,14 @@ namespace MonsterMiner.Core
                 ctx.Player.Respawn(spawn);
                 if (ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2 && ctx.CavernBounds != null)
                 {
-                    Vector3 centerWorld = QuarryCatalog.ResolveCenterWorld(ctx.CavernBounds);
-                    Vector3 toCenter = centerWorld - ctx.Player.transform.position;
-                    toCenter.y = 0f;
-                    if (toCenter.sqrMagnitude > 0.01f)
-                        ctx.Player.transform.rotation = Quaternion.LookRotation(toCenter.normalized, Vector3.up);
+                    Vector3 boatLocal = LakeCatalog.GetBoatBeachContentLocal(
+                        WorldScale.Feet(0.12f),
+                        0f);
+                    Vector3 lookTarget = ctx.CavernBounds.transform.TransformPoint(boatLocal);
+                    Vector3 toTarget = lookTarget - ctx.Player.transform.position;
+                    toTarget.y = 0f;
+                    if (toTarget.sqrMagnitude > 0.01f)
+                        ctx.Player.transform.rotation = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
                 }
                 else if (ctx.PlayerTruck != null)
                 {
@@ -202,6 +205,15 @@ namespace MonsterMiner.Core
                 ctx.PlayerTruck = truck;
 
             ctx.PlayerSpawnPoint = QuarryCatalog.ResolveHallFrontSpawnWorld(ctx.CavernBounds);
+            if (ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2)
+            {
+                ctx.PlayerSpawnPoint = LakeCatalog.ResolveBoatSandSpawnWorld(
+                    ctx.CavernBounds,
+                    WorldScale.Feet(0.12f),
+                    0f,
+                    0f,
+                    LakeCatalog.BoatPlayerSpawnShoreInsetFeet);
+            }
         }
 
         static bool TryResolveLandTruckStart(

@@ -1,0 +1,93 @@
+using MonsterMiner.Core;
+using MonsterMiner.Player;
+using UnityEngine;
+
+namespace MonsterMiner.UI
+{
+    public static class BoatHelmDisplay
+    {
+        const float PanelScreenHeightFraction = 0.2f;
+        const float PanelWidthPixels = 60f;
+
+        static Texture2D woodTexture;
+
+        public static void Draw(GameContext ctx)
+        {
+            var mount = ctx?.Player?.GetComponent<PlayerVehicleMount>();
+            if (mount == null || !mount.IsDrivingBoat)
+                return;
+
+            var boat = mount.CurrentBoat;
+            var panel = GetPanelRect();
+            GUI.DrawTexture(panel, WoodTexture(), ScaleMode.StretchToFill);
+
+            if (boat != null)
+            {
+                var style = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.UpperCenter,
+                    fontSize = 14,
+                    fontStyle = FontStyle.Bold,
+                    normal = { textColor = Color.white }
+                };
+                float mph = boat.DisplaySpeedMph;
+                GUI.Label(
+                    new Rect(panel.x - 40f, panel.y - 28f, panel.width + 80f, 24f),
+                    $"{mph:0.0} mph",
+                    style);
+            }
+        }
+
+        static Rect GetPanelRect()
+        {
+            float panelHeight = Screen.height * PanelScreenHeightFraction;
+            float x = (Screen.width - PanelWidthPixels) * 0.5f;
+            return new Rect(x, Screen.height - panelHeight, PanelWidthPixels, panelHeight);
+        }
+
+        static Texture2D WoodTexture()
+        {
+            if (woodTexture != null)
+                return woodTexture;
+
+            const int width = 512;
+            const int height = 256;
+            woodTexture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Bilinear
+            };
+
+            var baseBrown = new Color(0.45f, 0.28f, 0.14f);
+            var darkBrown = new Color(0.32f, 0.19f, 0.09f);
+            var lightBrown = new Color(0.56f, 0.36f, 0.2f);
+
+            for (int y = 0; y < height; y++)
+            {
+                float rowT = y / (float)(height - 1);
+                float plankWave = Mathf.Sin(rowT * Mathf.PI * 10f) * 0.04f;
+                float grain = Mathf.PerlinNoise(0.12f, rowT * 8f) * 0.08f;
+
+                for (int x = 0; x < width; x++)
+                {
+                    float colT = x / (float)(width - 1);
+                    float ring = Mathf.Sin(colT * Mathf.PI * 42f + rowT * 2.4f) * 0.035f;
+                    float knot = Mathf.PerlinNoise(colT * 3.5f + 1.7f, rowT * 2.1f) * 0.06f;
+                    float tone = plankWave + grain + ring + knot;
+
+                    Color color = tone switch
+                    {
+                        < -0.02f => Color.Lerp(baseBrown, darkBrown, Mathf.InverseLerp(-0.08f, -0.02f, tone)),
+                        > 0.03f => Color.Lerp(baseBrown, lightBrown, Mathf.InverseLerp(0.03f, 0.1f, tone)),
+                        _ => baseBrown
+                    };
+
+                    woodTexture.SetPixel(x, y, color);
+                }
+            }
+
+            woodTexture.Apply();
+            return woodTexture;
+        }
+    }
+}

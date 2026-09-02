@@ -23,6 +23,7 @@ TextureImporter:
   isReadable: 0
   streamingMipmaps: 0
   streamingMipmapsPriority: 0
+  vTOnly: 0
   grayScaleToAlpha: 0
   generateCubemap: 6
   cubemapConvolution: 0
@@ -54,9 +55,12 @@ TextureImporter:
   textureType: 0
   textureShape: 1
   singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
   maxTextureSizeSet: 0
   compressionQualitySet: 0
   textureFormatSet: 0
+  ignorePngGamma: 0
   applyGammaDecoding: 0
   platformSettings:
   - serializedVersion: 3
@@ -104,8 +108,8 @@ TextureImporter:
   assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
-  productId: 247228
-  packageName: Sparrow - Quirky Series
-  packageVersion: 1.4.1
+  productId: 178235
+  packageName: Free Animals - Quirky Series
+  packageVersion: 1.4
   assetPath: Assets/Quirky Series Ultimate/FREE/Textures/T_Sparrow.png
-  uploadId: 566470
+  uploadId: 580081

@@ -18,6 +18,8 @@ namespace MonsterMiner.World
 
             DestroyExistingChild(parent, "JarlLand");
             DestroyExistingChild(parent, "WarrensonsLake");
+            DestroyExistingChild(parent, "BeachSandSurface");
+            DestroyExistingChild(parent, "BoatShoreSandSemicircle");
 
             var center = QuarryCatalog.GetLandQuarry2Center();
             float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
@@ -27,11 +29,20 @@ namespace MonsterMiner.World
             root.SetParent(parent, false);
             root.localPosition = new Vector3(center.x, groundY, center.y);
 
+            var snowMaterial = CavernSurfaceMaterialFactory.GetSnowMaterial();
             LandQuarry2FloorBuilder.CreateFloor(
                 root,
-                LandQuarry2Boundary.SnowFloorLocalYOffset,
-                CavernSurfaceMaterialFactory.GetSnowMaterial());
+                center,
+                plainsBaseY,
+                groundY,
+                snowMaterial);
             LandQuarry2FloorBuilder.CreateFloorCollision(root, LandQuarry2Boundary.SnowFloorLocalYOffset);
+            LandQuarry2FloorBuilder.CreateSnowApron(
+                root,
+                center,
+                plainsBaseY,
+                groundY,
+                snowMaterial);
 
             PlainsWorldBuilder.RebuildGroundExcludingLandFeatures(parent, bounds);
 

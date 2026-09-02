@@ -51,7 +51,7 @@ namespace MonsterMiner.World
             if (truck == null)
                 rb.useGravity = false;
 
-            float groundY = PlainsWorldBuilder.SamplePlainsWorldY(bounds.transform, local.x, local.z);
+            float groundY = SampleSupportGroundWorldY(bounds, local.x, local.z);
             float bottomOffset = GetBottomOffset();
             float targetCenterY = groundY + bottomOffset + WorldScale.SpawnDropHeight;
             float feetY = rb.position.y - bottomOffset;
@@ -59,7 +59,7 @@ namespace MonsterMiner.World
             if (feetY < groundY - WorldScale.Feet(PopUpToleranceFeet))
             {
                 local = PushOutwardToSafePlains(local, bounds.Radius);
-                groundY = PlainsWorldBuilder.SamplePlainsWorldY(bounds.transform, local.x, local.z);
+                groundY = SampleSupportGroundWorldY(bounds, local.x, local.z);
                 targetCenterY = groundY + bottomOffset + WorldScale.SpawnDropHeight;
             }
 
@@ -72,7 +72,36 @@ namespace MonsterMiner.World
                 Vector3 pos = rb.position;
                 pos.y = targetCenterY;
                 rb.position = pos;
+                transform.position = pos;
+                Physics.SyncTransforms();
             }
+
+            Vector3 velocity = rb.linearVelocity;
+            velocity.y = 0f;
+            rb.linearVelocity = velocity;
+        }
+
+        public void SnapSupportedFeetToGroundNow()
+        {
+            if (rb == null || capsule == null)
+                return;
+
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds == null)
+                return;
+
+            Vector3 local = bounds.transform.InverseTransformPoint(rb.position);
+            if (!ShouldSupportAt(local, bounds.Radius))
+                return;
+
+            float groundY = SampleSupportGroundWorldY(bounds, local.x, local.z);
+            float bottomOffset = GetBottomOffset();
+            float targetCenterY = groundY + bottomOffset + WorldScale.SpawnDropHeight;
+            Vector3 pos = rb.position;
+            pos.y = targetCenterY;
+            rb.position = pos;
+            transform.position = pos;
+            Physics.SyncTransforms();
 
             Vector3 velocity = rb.linearVelocity;
             velocity.y = 0f;
@@ -81,8 +110,16 @@ namespace MonsterMiner.World
 
         public static bool ShouldSupportAt(Vector3 local, float plateauRadius)
         {
-            if (QuarryCatalog.IsLandQuarry2Local(local.x, local.z))
+            if (LandQuarry2Boundary.IsSnowGroundLocal(local.x, local.z))
                 return true;
+
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds != null
+                && LakeIslandVisualFactory.IsOverDryLand(local.x, local.z, bounds.transform))
+                return true;
+
+            if (LakeCatalog.IsLakeIslandLocal(local.x, local.z))
+                return false;
 
             if (LakeCatalog.IsOpenWaterLocal(local.x, local.z))
                 return false;
@@ -117,19 +154,32 @@ namespace MonsterMiner.World
             if (bounds == null)
                 return 0f;
 
-            if (ShouldSupportAt(new Vector3(localX, 0f, localZ), bounds.Radius))
-            {
-                if (QuarryCatalog.IsLandQuarry2Local(localX, localZ))
-                {
-                    float lowerBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
-                    float localY = LandQuarry2Boundary.SampleSnowFloorLocalY(localX, localZ, lowerBase);
-                    return bounds.transform.TransformPoint(new Vector3(localX, localY, localZ)).y;
-                }
+            if (bounds.TryResolveFloorWorldPoint(localX, localZ, out Vector3 floorPoint))
+                return floorPoint.y;
 
+            if (LandQuarry2Boundary.IsSnowGroundLocal(localX, localZ))
+            {
+                float lowerBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+                float localY = LandQuarry2Boundary.SampleSnowFloorLocalY(localX, localZ, lowerBase);
+                return bounds.transform.TransformPoint(new Vector3(localX, localY, localZ)).y;
+            }
+
+            if (LakeIslandVisualFactory.IsOverDryLand(localX, localZ, bounds.transform)
+                && LakeIslandVisualFactory.TrySampleWorldY(localX, localZ, bounds.transform, out float islandWorldY))
+            {
+                return islandWorldY;
+            }
+
+            if (LakeCatalog.IsBeachLocal(localX, localZ)
+                || LandQuarry2Boundary.IsLakeApproachLandLocal(localX, localZ))
+            {
                 return PlainsWorldBuilder.SamplePlainsWorldY(bounds.transform, localX, localZ);
             }
 
-            return CreatureSurfaceSampler.SampleWorldY(bounds, localX, localZ);
+            if (!ShouldSupportAt(new Vector3(localX, 0f, localZ), bounds.Radius))
+                return CreatureSurfaceSampler.SampleWorldY(bounds, localX, localZ);
+
+            return PlainsWorldBuilder.SamplePlainsWorldY(bounds.transform, localX, localZ);
         }
 
         public static Vector3 ResolvePlainsLandingPoint(CavernBounds bounds, Vector3 worldPoint, float halfHeight)

@@ -10,7 +10,7 @@ namespace MonsterMiner.World
         const string SpawnXKey = "MonsterMiner.LandQuarry2SpawnX";
         const string SpawnYKey = "MonsterMiner.LandQuarry2SpawnY";
         const string SpawnZKey = "MonsterMiner.LandQuarry2SpawnZ";
-        const int CurrentSpawnVersion = 3;
+        const int CurrentSpawnVersion = 4;
 
         public static bool HasSavedLandSpawn =>
             PlayerPrefs.GetInt(SavedFlagKey, 0) == 1

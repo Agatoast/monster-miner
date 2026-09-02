@@ -299,31 +299,34 @@ namespace MonsterMiner.World
             floorPoint = transform.TransformPoint(new Vector3(localX, localY, localZ));
 
             var rayOrigin = transform.TransformPoint(new Vector3(localX, FloorTopLocalY + Height, localZ));
-            var hits = Physics.RaycastAll(rayOrigin, Vector3.down, Height + 2f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-
-            float bestFloorY = float.MinValue;
-            Vector3 bestPoint = floorPoint;
-            bool foundRaycast = false;
+            Vector3 probeWorld = transform.TransformPoint(new Vector3(localX, 0f, localZ));
+            float rayStartY = Mathf.Max(rayOrigin.y, probeWorld.y + WorldScale.Feet(300f));
+            rayOrigin = new Vector3(probeWorld.x, rayStartY, probeWorld.z);
+            float rayLength = rayStartY - probeWorld.y + WorldScale.Feet(80f);
+            var hits = Physics.RaycastAll(rayOrigin, Vector3.down, rayLength, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            if (hits.Length > 1)
+                System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 
             foreach (var hit in hits)
             {
-                if (!FloorColliderUtility.IsFloorCollider(hit.collider))
+                if (!FloorColliderUtility.IsWalkSurfaceCollider(hit.collider))
+                    continue;
+                if (FloorColliderUtility.IsBoatFloorCollider(hit.collider))
+                    continue;
+                if (hit.normal.y < 0.35f)
                     continue;
 
                 var localHit = transform.InverseTransformPoint(hit.point);
                 if (!IsWalkableLocalPoint(localHit.x, localHit.z))
                     continue;
 
-                if (hit.point.y <= bestFloorY)
+                if (LakeIslandVisualFactory.IsOverDryLand(localHit.x, localHit.z, transform)
+                    && !FloorColliderUtility.IsLakeIslandTerrainCollider(hit.collider))
                     continue;
 
-                bestFloorY = hit.point.y;
-                bestPoint = hit.point;
-                foundRaycast = true;
+                floorPoint = hit.point;
+                return true;
             }
-
-            if (foundRaycast)
-                floorPoint = new Vector3(bestPoint.x, Mathf.Max(floorPoint.y, bestPoint.y), bestPoint.z);
 
             return true;
         }
@@ -340,6 +343,9 @@ namespace MonsterMiner.World
                 return true;
 
             if (LakeCatalog.IsBeachLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsWalkableLandLocal(localX, localZ, transform))
                 return true;
 
             if (LakeCatalog.IsOpenWaterLocal(localX, localZ))
