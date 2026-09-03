@@ -1,4 +1,3 @@
-using System.Collections;
 using MonsterMiner.Core;
 using MonsterMiner.UI;
 using MonsterMiner.World;
@@ -9,7 +8,6 @@ namespace MonsterMiner.Player
     public class PlayerHealth : MonoBehaviour
     {
         const float HydratedRegenPerSecond = 1f;
-        const float RespawnFleeDelay = 1.35f;
 
         public float MaxHealth { get; private set; } = 100f;
         public float CurrentHealth { get; private set; }
@@ -21,6 +19,8 @@ namespace MonsterMiner.Player
         PlayerController controller;
         Rigidbody rb;
         bool wasKinematic;
+        Vector3 lastDeathPosition;
+        int walletBalanceAtDeath;
 
         public void Initialize(PlayerController playerController, float maxHealth)
         {
@@ -77,56 +77,62 @@ namespace MonsterMiner.Player
 
             IsDead = true;
             var ctx = GameContext.Instance;
-            Vector3 deathPos = transform.position;
+            lastDeathPosition = transform.position;
 
             if (ctx != null)
             {
+                walletBalanceAtDeath = ctx.Wallet != null ? ctx.Wallet.Balance : 0;
+
                 var eggCarrier = GetComponent<PlayerEggCarrier>();
-                eggCarrier?.DropEggAt(deathPos);
+                eggCarrier?.DropEggAt(lastDeathPosition);
                 GetComponent<PlayerWingsFlight>()?.CancelFlightAndRestoreWings();
-                ctx.Inventory?.DropEquippedGlovesAt(deathPos);
-                ctx.Inventory?.DropAllAt(deathPos);
+                ctx.Inventory?.DropEquippedGlovesAt(lastDeathPosition);
+                ctx.Inventory?.DropAllAt(lastDeathPosition);
                 ctx.MakeAllMonstersFlee();
             }
 
             SetPlayerDisabled(true);
             OnDeath?.Invoke();
-            DeathScreenDisplay.Show(BeginRespawn);
+            DeathScreenDisplay.Show(RespawnNow);
         }
 
-        void BeginRespawn()
+        void RespawnNow()
         {
-            StartCoroutine(RespawnAfterMonstersFlee());
-        }
-
-        IEnumerator RespawnAfterMonstersFlee()
-        {
-            yield return new WaitForSeconds(RespawnFleeDelay);
-
             var ctx = GameContext.Instance;
-            Vector3 spawnPoint = ctx != null ? ctx.PlayerSpawnPoint : Vector3.up;
+            Vector3 spawnPoint = ResolveRespawnPoint(ctx);
 
             CurrentHealth = MaxHealth;
-            OnHealthChanged?.Invoke(CurrentHealth, MaxHealth);
-            controller?.Respawn(spawnPoint);
-            FaceQuarryCenterIfActive(ctx);
-            ctx?.Inventory?.EnsureStarterPickaxeIfMissing(ctx.Database?.pickaxeItem);
-            SetPlayerDisabled(false);
             IsDead = false;
+            OnHealthChanged?.Invoke(CurrentHealth, MaxHealth);
+            SetPlayerDisabled(false);
+            controller?.Respawn(spawnPoint);
+            ctx?.Wallet?.RestoreBalance(walletBalanceAtDeath);
+            ctx?.Inventory?.EnsureStarterPickaxeIfMissing(ctx.Database?.pickaxeItem);
         }
 
-        static void FaceQuarryCenterIfActive(GameContext ctx)
+        Vector3 ResolveRespawnPoint(GameContext ctx)
         {
-            if (ctx?.Player == null || ctx.CaveProgression == null || !ctx.CaveProgression.HasLandQuarry2 || ctx.CavernBounds == null)
-                return;
+            var bounds = ctx?.CavernBounds;
+            if (bounds == null)
+                return lastDeathPosition;
 
-            Vector3 centerWorld = QuarryCatalog.ResolveCenterWorld(ctx.CavernBounds);
-            Vector3 toCenter = centerWorld - ctx.Player.transform.position;
-            toCenter.y = 0f;
-            if (toCenter.sqrMagnitude <= 0.01f)
-                return;
+            var visitTracker = GetComponent<QuarryVisitTracker>();
+            if (ShouldRespawnNearDroppedEquipment(bounds, visitTracker, lastDeathPosition))
+                return QuarryCatalog.ResolveNearDroppedEquipmentSpawnWorld(bounds, lastDeathPosition);
 
-            ctx.Player.transform.rotation = Quaternion.LookRotation(toCenter.normalized, Vector3.up);
+            int quarryIndex = visitTracker != null
+                ? visitTracker.LastVisitedQuarryIndex
+                : QuarryCatalog.PlateauQuarryIndex;
+            return QuarryCatalog.ResolveQuarryShopRespawnWorld(bounds, quarryIndex);
+        }
+
+        static bool ShouldRespawnNearDroppedEquipment(CavernBounds bounds, QuarryVisitTracker visitTracker, Vector3 deathPosition)
+        {
+            if (visitTracker == null || visitTracker.LastVisitedQuarryIndex != QuarryCatalog.PlateauQuarryIndex)
+                return false;
+
+            Vector3 local = bounds.transform.InverseTransformPoint(deathPosition);
+            return !bounds.IsOnPlateauLocal(local.x, local.z);
         }
 
         void SetPlayerDisabled(bool disabled)
@@ -146,8 +152,7 @@ namespace MonsterMiner.Player
                 }
             }
 
-            if (controller != null)
-                controller.enabled = !disabled;
+            // Keep PlayerController enabled while dead so ApplyCursorState unlocks the cursor for the death UI.
 
             var combat = GetComponent<PlayerCombat>();
             if (combat != null)

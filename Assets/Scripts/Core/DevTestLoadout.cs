@@ -9,8 +9,10 @@ namespace MonsterMiner.Core
     public static class DevTestLoadout
     {
         public const bool Enabled = true;
+        public const bool SpawnAsQuarry2CompleteWithMagicCompass = true;
         const int MaxInventorySlots = 7;
         const int MachineGunSlotIndex = 2;
+        const int MagicCompassSlotIndex = 1;
 
         public static void Apply(GameContext ctx)
         {
@@ -31,7 +33,16 @@ namespace MonsterMiner.Core
 
             ctx.PlayerRangedAmmo?.Reload("machinegun");
 
+            if (SpawnAsQuarry2CompleteWithMagicCompass)
+                ApplyQuarry2CompleteWithMagicCompass(ctx);
+
             ctx.Inventory.SelectSlot(InventorySystem.PickaxeSlotIndex);
+        }
+
+        static void ApplyQuarry2CompleteWithMagicCompass(GameContext ctx)
+        {
+            ctx.CaveProgression?.CompleteJarlSkullQuest();
+            AssignSlot(ctx.Inventory, MagicCompassSlotIndex, ctx.Database.magicCompassItem);
         }
 
         static void ClearNonPickaxeSlots(InventorySystem inventory)

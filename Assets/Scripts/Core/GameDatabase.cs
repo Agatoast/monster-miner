@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using MonsterMiner.Data;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.Core
@@ -44,6 +45,8 @@ namespace MonsterMiner.Core
         public ItemDefinition salamanderLureItem;
         public ItemDefinition phoenixLureItem;
         public ItemDefinition pentachickHeartItem;
+        public ItemDefinition jormungandrSkullItem;
+        public ItemDefinition magicCompassItem;
         public ItemDefinition caveRatFinderItem;
         public ItemDefinition legendaryWeaponItem;
         public ItemDefinition legendarySpearItem;
@@ -58,6 +61,7 @@ namespace MonsterMiner.Core
         public ItemDefinition glovesBlue;
         public ItemDefinition glovesPurple;
         public ItemDefinition glovesGold;
+        public List<ShopUpgradeDefinition> jarlLandFinderListings = new();
 
         public ItemDefinition[] GetNonBossMonsterDropItems()
         {
@@ -73,6 +77,65 @@ namespace MonsterMiner.Core
             }
 
             return results.ToArray();
+        }
+
+        public MonsterDefinition GetMonster(string monsterId)
+        {
+            if (string.IsNullOrEmpty(monsterId))
+                return null;
+
+            return monsters.Find(m => m != null && m.monsterId == monsterId);
+        }
+
+        public int GetShopListingCost(ItemDefinition item)
+        {
+            if (item == null)
+                return 0;
+
+            int best = 0;
+            foreach (var upgrade in shopUpgrades)
+            {
+                if (upgrade?.unlockItem != item)
+                    continue;
+
+                if (upgrade.cost > best)
+                    best = upgrade.cost;
+            }
+
+            if (pickaxeUpgrade?.unlockItem == item)
+                best = Mathf.Max(best, pickaxeUpgrade.cost);
+            if (inventoryUpgrade?.unlockItem == item)
+                best = Mathf.Max(best, inventoryUpgrade.cost);
+            if (waterPurchase?.unlockItem == item)
+                best = Mathf.Max(best, waterPurchase.cost);
+            if (knifeMapListing?.unlockItem == item)
+                best = Mathf.Max(best, knifeMapListing.cost);
+            if (spearListing?.unlockItem == item)
+                best = Mathf.Max(best, spearListing.cost);
+            if (pistolListing?.unlockItem == item)
+                best = Mathf.Max(best, pistolListing.cost);
+            if (rifleListing?.unlockItem == item)
+                best = Mathf.Max(best, rifleListing.cost);
+            if (shotgunListing?.unlockItem == item)
+                best = Mathf.Max(best, shotgunListing.cost);
+            if (machinegunListing?.unlockItem == item)
+                best = Mathf.Max(best, machinegunListing.cost);
+            if (grenadeListing?.unlockItem == item)
+                best = Mathf.Max(best, grenadeListing.cost);
+            if (caveRatFinderListing?.unlockItem == item)
+                best = Mathf.Max(best, caveRatFinderListing.cost);
+            if (lizardLureListing?.unlockItem == item)
+                best = Mathf.Max(best, lizardLureListing.cost);
+            if (rabbitFinderListing?.unlockItem == item)
+                best = Mathf.Max(best, rabbitFinderListing.cost);
+            if (caveLizardFinderListing?.unlockItem == item)
+                best = Mathf.Max(best, caveLizardFinderListing.cost);
+            if (salamanderLureListing?.unlockItem == item)
+                best = Mathf.Max(best, salamanderLureListing.cost);
+            if (phoenixLureListing?.unlockItem == item)
+                best = Mathf.Max(best, phoenixLureListing.cost);
+
+            return best;
         }
 
         public static GameDatabase CreateRuntimeDefaults()
@@ -93,7 +156,7 @@ namespace MonsterMiner.Core
             db.rifleItem = MakeWeapon("rifle", "Rifle", 200, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Rifle");
             db.shotgunItem = MakeWeapon("shotgun", "Shotgun", 30, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Shotgun");
             db.machinegunItem = MakeWeapon("machinegun", "Machine Gun", 40, new Color(0.25f, 0.5f, 1f), "Textures/Inventory/Machinegun");
-            db.grenadeItem = MakeWeapon("grenade", "Grenade", 12, new Color(0.35f, 0.75f, 0.25f), "Textures/Inventory/Grenade");
+            db.grenadeItem = MakeWeapon("grenade", "Grenade", 30, new Color(0.35f, 0.75f, 0.25f), "Textures/Inventory/Grenade");
             db.legendaryWeaponItem = MakeLegendaryKnife("legendary_blade", "Legendary Blade", 6, new Color(1f, 0.85f, 0.2f));
             db.legendarySpearItem = MakeLegendaryWeapon("spear", "Spear", 3, "Textures/Inventory/Spear");
             db.legendaryPistolItem = MakeLegendaryWeapon("pistol", "Pistol", 25, "Textures/Inventory/Pistol");
@@ -127,6 +190,13 @@ namespace MonsterMiner.Core
             var phoenixLure = MakeFinder("phoenix_lure", "Pentachick Finder", 50, new Color(1f, 0.45f, 0.1f), "pentachick", EggFinderRarity.Rare, 1, 2);
             var pentachickHeart = MakeItem("pentachick_heart", "Pentachick Heart", ItemCategory.Key, 50, new Color(1f, 0.35f, 0.12f), false);
             pentachickHeart.isBossDrop = true;
+            var jormungandrSkull = MakeItem("jormungandr_skull", "Jörmungandr Skull", ItemCategory.Key, 50, new Color(0.82f, 0.78f, 0.68f), false);
+            jormungandrSkull.isBossDrop = true;
+            jormungandrSkull.iconResourcePath = "Textures/Inventory/JormungandrSkull";
+            var magicCompass = MakeItem("magic_compass", "Magic Compass", ItemCategory.Key, 0, new Color(0.95f, 0.78f, 0.22f), false);
+            magicCompass.canBeSold = false;
+            magicCompass.isMagicCompass = true;
+            db.magicCompassItem = magicCompass;
             var slotTestToken = MakeItem("slot_test_token", "Slot Test Token", ItemCategory.Misc, 0, new Color(1f, 0.82f, 0.15f), false);
             slotTestToken.canBeSold = false;
             slotTestToken.isSlotTestToken = true;
@@ -140,7 +210,7 @@ namespace MonsterMiner.Core
                 db.legendaryShotgunItem, db.legendaryMachinegunItem,
                 db.glovesGray, db.glovesWhite, db.glovesGreen, db.glovesBlue, db.glovesPurple, db.glovesGold,
                 rabbitMeat, iguanaMeat, caveLizardMeat, gremlinMeat, salamanderMeat,
-                core, caveKey, pebble, ore, gremlinFinder, lizardLure, rabbitFinder, caveLizardFinder, salamanderFinder, phoenixLure, pentachickHeart,
+                core, caveKey, pebble, ore, gremlinFinder, lizardLure, rabbitFinder, caveLizardFinder, salamanderFinder, phoenixLure, pentachickHeart, jormungandrSkull, magicCompass,
                 slotTestToken
             });
 
@@ -152,6 +222,30 @@ namespace MonsterMiner.Core
             db.monsters.Add(MakeMonster("pentachick", "Pentachick", 50f, 12f, 15f, 1f, new Color(1f, 0.45f, 0.1f), pentachickHeart, 0f, boss: true, prefabPath: "Models/Creatures/pentachick"));
             db.monsters.Add(MakeMonster("exploder", "Rare Exploder", 30f, 11f, 10f, 1.1f, new Color(1f, 0.4f, 0.1f), core, 0f, explodes: true));
             db.monsters.Add(MakeMonster("quest_boss", "Quest Monster", 80f, 11f, 16f, 1.6f, new Color(0.6f, 0.1f, 0.8f), caveKey, 0f, boss: true));
+
+            var islandTaipan = MakeMonster(
+                "island_taipan",
+                "Jörmungandr",
+                300f,
+                11f,
+                10f,
+                1f,
+                new Color(0.35f, 0.55f, 0.22f),
+                jormungandrSkull,
+                0f,
+                boss: true,
+                prefabPath: "Models/Creatures/taipan");
+            islandTaipan.chaseWhenPlayerOnIsland = true;
+            islandTaipan.moveSpeedMph = 40f;
+            islandTaipan.attackRange = WorldScale.Feet(45f);
+            islandTaipan.attackCooldown = 1f;
+            islandTaipan.knockbackForce = 6f;
+            db.monsters.Add(islandTaipan);
+
+            var level2Items = new List<ItemDefinition>();
+            var level2FinderListings = new List<ShopUpgradeDefinition>();
+            RegisterLevel2Creatures(db, level2Items, level2FinderListings);
+            db.jarlLandFinderListings = level2FinderListings;
 
             db.pickaxeUpgrade = MakeUpgrade("pickaxe_dmg", "Pickaxe Upgrade", "Upgrade pickaxe mining power and head color.", UpgradeType.PickaxeDamage, 20, 1f, 5);
             db.inventoryUpgrade = MakeUpgrade("inv_slot", "Inventory Upgrade", "Add one inventory slot.", UpgradeType.InventorySlot, 8, 1f, 7);
@@ -169,6 +263,7 @@ namespace MonsterMiner.Core
             db.salamanderLureItem = salamanderFinder;
             db.phoenixLureItem = phoenixLure;
             db.pentachickHeartItem = pentachickHeart;
+            db.jormungandrSkullItem = jormungandrSkull;
             db.caveRatFinderItem = gremlinFinder;
             db.caveRatFinderListing = MakeUpgrade("gremlin_finder_shop", "Gremlin Finder", "Buy a gremlin finder. Locates gremlin eggs.", UpgradeType.WeaponUnlock, 2, 1f, int.MaxValue, gremlinFinder);
             db.lizardLureListing = MakeUpgrade("lizard_lure_shop", "Iguana Finder", "Buy an iguana finder. Locates iguana eggs.", UpgradeType.WeaponUnlock, 0, 1f, int.MaxValue, lizardLure);
@@ -178,8 +273,56 @@ namespace MonsterMiner.Core
             db.phoenixLureListing = MakeUpgrade("phoenix_lure_shop", "Pentachick Finder", "Buy a pentachick finder. Locates pentachick eggs.", UpgradeType.WeaponUnlock, 50, 1f, int.MaxValue, phoenixLure);
 
             db.shopUpgrades.AddRange(new[] { db.pickaxeUpgrade, db.inventoryUpgrade, db.waterPurchase, db.knifeMapListing, db.caveRatFinderListing, db.lizardLureListing, db.rabbitFinderListing, db.caveLizardFinderListing, db.salamanderLureListing, db.phoenixLureListing });
+            db.shopUpgrades.AddRange(level2FinderListings);
+            db.items.AddRange(level2Items);
 
             return db;
+
+            static void RegisterLevel2Creatures(
+                GameDatabase db,
+                List<ItemDefinition> itemsToAdd,
+                List<ShopUpgradeDefinition> jarlFinderListings)
+            {
+                foreach (var spec in Level2CreatureCatalog.Creatures)
+                {
+                    var meat = MakeMeat(
+                        $"{spec.MonsterId}_meat",
+                        spec.MeatSellPrice,
+                        $"Textures/Creatures/Meat/{spec.MonsterId}");
+                    var finder = MakeFinder(
+                        $"{spec.MonsterId}_finder",
+                        $"{spec.DisplayName} Finder",
+                        spec.FinderPrice,
+                        spec.BodyColor,
+                        spec.MonsterId,
+                        EggFinderRarity.Common,
+                        3,
+                        5);
+                    db.monsters.Add(MakeMonster(
+                        spec.MonsterId,
+                        spec.DisplayName,
+                        spec.Hp,
+                        spec.MoveSpeedMph,
+                        spec.DamagePerSecond,
+                        1.5f,
+                        spec.BodyColor,
+                        meat,
+                        0f,
+                        flees: spec.Flees,
+                        prefabPath: spec.PrefabResourcePath));
+                    itemsToAdd.Add(meat);
+                    itemsToAdd.Add(finder);
+                    jarlFinderListings.Add(MakeUpgrade(
+                        $"{spec.MonsterId}_finder_shop",
+                        $"{spec.DisplayName} Finder",
+                        $"Buy a {spec.DisplayName.ToLower()} finder. Locates {spec.DisplayName.ToLower()} eggs.",
+                        UpgradeType.WeaponUnlock,
+                        spec.FinderPrice,
+                        1f,
+                        int.MaxValue,
+                        finder));
+                }
+            }
 
             static ItemDefinition MakeLegendaryWeapon(string baseId, string name, int baseDamage, string iconPath)
             {

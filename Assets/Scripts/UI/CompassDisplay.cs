@@ -1,4 +1,6 @@
 using MonsterMiner.Core;
+using MonsterMiner.Inventory;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.UI
@@ -6,7 +8,8 @@ namespace MonsterMiner.UI
     public static class CompassDisplay
     {
         static readonly Color RingColor = Color.black;
-        static readonly Color ArrowColor = new Color(0.95f, 0.12f, 0.1f, 1f);
+        static readonly Color NorthArrowColor = new Color(0.95f, 0.12f, 0.1f, 1f);
+        static readonly Color MagicArrowColor = new Color(0.95f, 0.78f, 0.22f, 1f);
 
         static Material glMaterial;
 
@@ -16,6 +19,13 @@ namespace MonsterMiner.UI
             if (player == null)
                 return;
 
+            DrawNorthCompass(player.ViewCamera);
+            if (ctx.Inventory != null && ctx.Inventory.HasMagicCompass())
+                DrawMagicCompass(player.ViewCamera, ctx, player.transform.position);
+        }
+
+        static void DrawNorthCompass(Camera camera)
+        {
             float x = HudIconLayout.CompassX;
             float y = HudIconLayout.CompassY;
             float size = HudIconLayout.IconSize;
@@ -28,8 +38,44 @@ namespace MonsterMiner.UI
             if (Event.current.type == EventType.Repaint)
                 DrawRing(center, outerRadius, innerRadius);
 
-            float angle = GetNorthArrowAngle(player.ViewCamera);
-            DrawArrow(center, angle, innerRadius);
+            float angle = GetNorthArrowAngle(camera);
+            DrawArrow(center, angle, innerRadius, NorthArrowColor);
+        }
+
+        static void DrawMagicCompass(Camera camera, GameContext ctx, Vector3 playerWorld)
+        {
+            float innerRadius = HudIconLayout.IconSize * 0.38f * 2f;
+            var center = new Vector2(
+                HudIconLayout.MagicCompassCenterX,
+                HudIconLayout.MagicCompassCenterY(innerRadius));
+            float angle = GetMagicCompassArrowAngle(camera, ctx, playerWorld);
+            DrawArrow(center, angle, innerRadius, MagicArrowColor);
+        }
+
+        static float GetMagicCompassArrowAngle(Camera camera, GameContext ctx, Vector3 playerWorld)
+        {
+            if (ctx?.CavernBounds == null)
+                return GetNorthArrowAngle(camera);
+
+            Vector3 targetWorld = QuarryCatalog.ResolveQuarryCenterWorld(
+                ctx.CavernBounds,
+                QuarryCatalog.LandQuarry3Index);
+            Vector3 toTarget = targetWorld - playerWorld;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude < 0.01f)
+                return GetNorthArrowAngle(camera);
+
+            toTarget.Normalize();
+            Vector3 forward = camera != null
+                ? Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up)
+                : Vector3.forward;
+            if (forward.sqrMagnitude < 0.01f)
+                forward = Vector3.forward;
+            forward.Normalize();
+
+            var targetScreen = new Vector2(toTarget.x, -toTarget.z);
+            var forwardScreen = new Vector2(forward.x, -forward.z);
+            return Vector2.SignedAngle(forwardScreen, targetScreen);
         }
 
         static float GetNorthArrowAngle(Camera camera)
@@ -82,7 +128,7 @@ namespace MonsterMiner.UI
             return new Vector3(Mathf.Cos(angleRadians) * radius, -Mathf.Sin(angleRadians) * radius, 0f);
         }
 
-        static void DrawArrow(Vector2 center, float angle, float innerRadius)
+        static void DrawArrow(Vector2 center, float angle, float innerRadius, Color color)
         {
             if (Event.current.type != EventType.Repaint)
                 return;
@@ -97,7 +143,7 @@ namespace MonsterMiner.UI
                 Quaternion.Euler(0f, 0f, angle),
                 Vector3.one));
             GL.Begin(GL.TRIANGLES);
-            GL.Color(ArrowColor);
+            GL.Color(color);
             GL.Vertex(new Vector3(0f, -innerRadius, 0f));
             GL.Vertex(new Vector3(-halfWidth, innerRadius, 0f));
             GL.Vertex(new Vector3(halfWidth, innerRadius, 0f));

@@ -31,6 +31,7 @@ namespace MonsterMiner.World
             CreateWaterSurface(root, waterLocalY);
             LakeIslandVisualFactory.Create(root, parent, waterLocalY, bounds);
             KnarrVisualFactory.CreateAtBeach(parent);
+            CreateWarrenson(parent, bounds);
             ConfigureSpawnExclusions(bounds, root);
             EnsureRenderersEnabled(root.gameObject);
         }
@@ -50,10 +51,42 @@ namespace MonsterMiner.World
             WaterWorksLakeVisualFactory.CreateLakeSurface(root, waterLocalY, diameter);
         }
 
+        static void CreateWarrenson(Transform contentRoot, CavernBounds bounds)
+        {
+            if (contentRoot == null || bounds == null)
+                return;
+
+            var spawn = LakeCatalog.GetWarrensonSpawnContentLocal();
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float groundY = LandQuarry2Boundary.SampleSnowFloorLocalY(spawn.x, spawn.y, plainsBaseY);
+            Vector3 contentLocal = new Vector3(spawn.x, groundY, spawn.y);
+            float floorWorldY = bounds.transform.TransformPoint(contentLocal).y;
+
+            Vector2 jarlCenter = QuarryCatalog.GetLandQuarry2Center();
+            Vector3 toJarl = new Vector3(jarlCenter.x - spawn.x, 0f, jarlCenter.y - spawn.y);
+            Quaternion rotation = toJarl.sqrMagnitude > 0.001f
+                ? Quaternion.LookRotation(toJarl.normalized, Vector3.up)
+                : Quaternion.LookRotation(Vector3.back, Vector3.up);
+
+            LowPolyPeopleVisualFactory.CreateWarrensonNpc(
+                contentRoot,
+                contentLocal,
+                rotation,
+                floorWorldY);
+        }
+
         static void ConfigureSpawnExclusions(CavernBounds bounds, Transform lakeRoot)
         {
             if (bounds == null || lakeRoot == null)
                 return;
+
+            var warrensonSpawn = LakeCatalog.GetWarrensonSpawnContentLocal();
+            float npcPad = WorldScale.Feet(8f);
+            bounds.AddSpawnExclusion(
+                warrensonSpawn.x - npcPad,
+                warrensonSpawn.x + npcPad,
+                warrensonSpawn.y - npcPad,
+                warrensonSpawn.y + npcPad);
 
             var center = LakeCatalog.GetCenterLocal();
             float pad = WorldScale.Feet(20f);

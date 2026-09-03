@@ -90,6 +90,7 @@ namespace MonsterMiner.Core
 
             ctx.PlayerHealth = playerGo.AddComponent<PlayerHealth>();
             ctx.PlayerHealth.Initialize(ctx.Player, 100f);
+            playerGo.AddComponent<QuarryVisitTracker>();
 
             ctx.PlayerThirst = playerGo.AddComponent<PlayerThirst>();
             ctx.PlayerThirst.Initialize();
@@ -205,7 +206,9 @@ namespace MonsterMiner.Core
                 ctx.PlayerTruck = truck;
 
             ctx.PlayerSpawnPoint = QuarryCatalog.ResolveHallFrontSpawnWorld(ctx.CavernBounds);
-            if (ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2)
+            if (ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2
+                && !QuarryCatalog.SpawnPlayerOnIslandForTesting
+                && !QuarryCatalog.SpawnPlayerAtJarlLandShopForTesting)
             {
                 ctx.PlayerSpawnPoint = LakeCatalog.ResolveBoatSandSpawnWorld(
                     ctx.CavernBounds,

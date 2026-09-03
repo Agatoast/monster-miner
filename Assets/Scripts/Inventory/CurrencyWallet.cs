@@ -45,5 +45,15 @@ namespace MonsterMiner.Inventory
             Balance += amount;
             OnBalanceChanged?.Invoke(Balance);
         }
+
+        public void RestoreBalance(int amount)
+        {
+            int restored = Mathf.Max(0, amount);
+            if (Balance == restored)
+                return;
+
+            Balance = restored;
+            OnBalanceChanged?.Invoke(Balance);
+        }
     }
 }

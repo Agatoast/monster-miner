@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MonsterMiner.Data;
 using UnityEngine;
 
 namespace MonsterMiner.World
@@ -7,6 +8,8 @@ namespace MonsterMiner.World
     {
         public const string Cave1MapId = "cave_1";
         public const string Cave2MapId = "cave_2";
+        public const string JarlLandMapId = "jarl_land";
+        public const string WildernessMapId = "wilderness";
 
         static readonly string[] Cave1Creatures =
         {
@@ -21,12 +24,7 @@ namespace MonsterMiner.World
         {
         };
 
-        static readonly IReadOnlyDictionary<string, string[]> CreaturesByMap =
-            new Dictionary<string, string[]>
-            {
-                { Cave1MapId, Cave1Creatures },
-                { Cave2MapId, Cave2Creatures }
-            };
+        static string[] wildernessCreatures;
 
         public static string GetMapIdForWorldPoint(CavernBounds bounds, Vector3 worldPoint)
         {
@@ -34,15 +32,58 @@ namespace MonsterMiner.World
                 return Cave1MapId;
 
             var local = bounds.transform.InverseTransformPoint(worldPoint);
-            return bounds.IsInCave2ZoneLocal(local.x, local.z) ? Cave2MapId : Cave1MapId;
+            if (bounds.IsInCave2ZoneLocal(local.x, local.z))
+                return Cave2MapId;
+
+            if (QuarryCatalog.IsLandQuarry2Local(local.x, local.z))
+                return JarlLandMapId;
+
+            if (PlateauBoundary.IsOnPlateau(local.x, local.z, bounds.Radius))
+                return Cave1MapId;
+
+            return WildernessMapId;
         }
 
         public static IReadOnlyList<string> GetCreaturesForMap(string mapId)
         {
-            if (mapId != null && CreaturesByMap.TryGetValue(mapId, out var creatures))
-                return creatures;
+            if (mapId == JarlLandMapId)
+                return GetJarlLandCreatures();
+
+            if (mapId == WildernessMapId)
+                return GetWildernessCreatures();
+
+            if (mapId == Cave2MapId)
+                return Cave2Creatures;
 
             return Cave1Creatures;
+        }
+
+        static IReadOnlyList<string> GetJarlLandCreatures()
+        {
+            var level2 = Level2CreatureCatalog.GetMonsterIds();
+            if (level2.Length > 0)
+                return level2;
+
+            return Cave1Creatures;
+        }
+
+        static IReadOnlyList<string> GetWildernessCreatures()
+        {
+            if (wildernessCreatures != null)
+                return wildernessCreatures;
+
+            var level2 = Level2CreatureCatalog.GetMonsterIds();
+            if (level2.Length == 0)
+            {
+                wildernessCreatures = Cave1Creatures;
+                return wildernessCreatures;
+            }
+
+            var combined = new string[Cave1Creatures.Length + level2.Length];
+            Cave1Creatures.CopyTo(combined, 0);
+            level2.CopyTo(combined, Cave1Creatures.Length);
+            wildernessCreatures = combined;
+            return wildernessCreatures;
         }
 
         public static bool AllowsWorldSpawn(string creatureTypeId, string mapId)

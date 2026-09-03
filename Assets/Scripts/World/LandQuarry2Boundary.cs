@@ -55,9 +55,6 @@ namespace MonsterMiner.World
             if (ContainsLocal(localX, localZ))
                 return true;
 
-            if (LakeCatalog.IsBeachLocal(localX, localZ))
-                return false;
-
             return IsLakeApproachLandLocal(localX, localZ);
         }
 

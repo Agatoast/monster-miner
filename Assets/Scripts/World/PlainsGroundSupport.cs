@@ -115,11 +115,8 @@ namespace MonsterMiner.World
 
             var bounds = GameContext.Instance?.CavernBounds;
             if (bounds != null
-                && LakeIslandVisualFactory.IsOverDryLand(local.x, local.z, bounds.transform))
+                && LakeCatalog.IsWalkableLandLocal(local.x, local.z, bounds.transform))
                 return true;
-
-            if (LakeCatalog.IsLakeIslandLocal(local.x, local.z))
-                return false;
 
             if (LakeCatalog.IsOpenWaterLocal(local.x, local.z))
                 return false;
@@ -164,7 +161,8 @@ namespace MonsterMiner.World
                 return bounds.transform.TransformPoint(new Vector3(localX, localY, localZ)).y;
             }
 
-            if (LakeIslandVisualFactory.IsOverDryLand(localX, localZ, bounds.transform)
+            if (bounds != null
+                && LakeCatalog.IsWalkableLandLocal(localX, localZ, bounds.transform)
                 && LakeIslandVisualFactory.TrySampleWorldY(localX, localZ, bounds.transform, out float islandWorldY))
             {
                 return islandWorldY;

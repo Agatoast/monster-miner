@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 47e94ad011e79fe45b3a9a693e8d46fd
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 112000000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 297857
+  packageName: Stylized Skull
+  packageVersion: 1.0
+  assetPath: Assets/Stylized Skull/Scenes/SampleScene/LightingData.asset
+  uploadId: 696973

@@ -56,6 +56,7 @@ namespace MonsterMiner.UI
 
         void Update()
         {
+            DeathScreenDisplay.EnsureCursorUnlocked();
             DeathScreenDisplay.HandleInput();
             MinerTurnInPopupDisplay.HandleInput();
             WorldMapDisplay.HandleInput();
@@ -82,6 +83,12 @@ namespace MonsterMiner.UI
             var ctx = GameContext.Instance;
             if (ctx == null)
                 return;
+
+            if (DeathScreenDisplay.IsActive)
+            {
+                DeathScreenDisplay.Draw();
+                return;
+            }
 
             var style = new GUIStyle(GUI.skin.label)
             {
@@ -116,11 +123,7 @@ namespace MonsterMiner.UI
                 RangedCrosshairDisplay.Draw(ctx);
             }
 
-            if (DeathScreenDisplay.IsActive)
-            {
-                DeathScreenDisplay.Draw();
-            }
-            else if (MinerTurnInPopupDisplay.IsActive)
+            if (MinerTurnInPopupDisplay.IsActive)
             {
                 MinerTurnInPopupDisplay.Draw();
             }
@@ -167,6 +170,14 @@ namespace MonsterMiner.UI
                             {
                                 JarlDialogueDisplay.Draw(jarl, camera);
                             }
+                            else if (interactor.CurrentTarget is Quarry3QuestNpc quarryGuide)
+                            {
+                                JarlDialogueDisplay.Draw(quarryGuide, camera);
+                            }
+                            else if (interactor.CurrentTarget is WarrensonBoatNpc warrenson)
+                            {
+                                JarlDialogueDisplay.Draw(warrenson, camera);
+                            }
                             else
                             {
                                 DrawInteractPrompt(
@@ -182,11 +193,10 @@ namespace MonsterMiner.UI
             }
 
             TruckDashboardDisplay.Draw(ctx);
+            InventoryHotbarDisplay.Draw(ctx);
 
             if (!string.IsNullOrEmpty(message))
                 GUI.Label(new Rect(Screen.width * 0.5f - 300f, Screen.height - messageBottomOffset, 600f, 40f), message, bigCenter);
-
-            InventoryHotbarDisplay.Draw(ctx);
 
             if (!string.IsNullOrEmpty(centerMessage))
             {

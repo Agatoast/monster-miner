@@ -1,4 +1,5 @@
 using MonsterMiner.Core;
+using MonsterMiner.Economy;
 using MonsterMiner.Util;
 using MonsterMiner.World;
 using UnityEngine;
@@ -97,6 +98,9 @@ namespace MonsterMiner.Player
             if (boat == null || IsMounted || boat.HasDriver || controller == null || rb == null)
                 return false;
 
+            if (!WarrensonBoatNpc.IsBoatUsable(GameContext.Instance))
+                return false;
+
             if (GetComponent<PlayerWingsFlight>()?.IsFlying == true)
                 return false;
 
@@ -129,6 +133,9 @@ namespace MonsterMiner.Player
         public bool TryMountBoatDriverFromDeck(DriveableBoat boat)
         {
             if (boat == null || !IsInBoatCargo || currentBoat != boat || boat.HasDriver || controller == null || rb == null)
+                return false;
+
+            if (!WarrensonBoatNpc.IsBoatUsable(GameContext.Instance))
                 return false;
 
             if (GetComponent<PlayerWingsFlight>()?.IsFlying == true)
@@ -212,6 +219,9 @@ namespace MonsterMiner.Player
 
         public bool TryMountBoatCargo(DriveableBoat boat)
         {
+            if (!WarrensonBoatNpc.IsBoatUsable(GameContext.Instance))
+                return false;
+
             return TryMountCargoVehicle(boat);
         }
 
@@ -570,6 +580,26 @@ namespace MonsterMiner.Player
             if (bounds == null || boat == null)
                 return false;
 
+            Vector3 boatLocal = bounds.transform.InverseTransformPoint(boat.HostTransform.position);
+            bool nearIsland = LakeCatalog.HasLakeIsland
+                && LakeCatalog.IsNearLakeIslandShoreLocal(
+                    boatLocal.x,
+                    boatLocal.z,
+                    bounds.transform,
+                    LakeCatalog.BoatDismountShoreProximityFeet);
+
+            if (nearIsland)
+            {
+                if (LakeCatalog.TryResolveIslandBoatStopSailingWorldPosition(
+                        bounds,
+                        boat.HostTransform.position,
+                        out landWorldPosition))
+                    return true;
+
+                GameContext.Instance?.Hud?.ShowMessage("Could not step onto land.");
+                return false;
+            }
+
             int referenceCount = boat.FillStopSailingReferenceWorldPoints(BoatStopSailingReferenceBuffer);
             if (LakeCatalog.TryResolveBoatStopSailingWorldPosition(
                     bounds,
@@ -588,12 +618,6 @@ namespace MonsterMiner.Player
                         assumeNearShore: true))
                     return true;
             }
-
-            if (LakeCatalog.TryResolveIslandBoatStopSailingWorldPosition(
-                    bounds,
-                    boat.HostTransform.position,
-                    out landWorldPosition))
-                return true;
 
             GameContext.Instance?.Hud?.ShowMessage("Could not step onto land.");
             return false;

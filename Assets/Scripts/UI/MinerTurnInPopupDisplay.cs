@@ -11,18 +11,21 @@ namespace MonsterMiner.UI
         const float ButtonHeight = 76f;
 
         static GUIStyle bodyStyle;
+        static GUIStyle centeredBodyStyle;
         static GUIStyle footerStyle;
         static GUIStyle okButtonStyle;
 
         static bool isActive;
+        static bool centerBodyText;
         static string body = string.Empty;
         static int shownFrame = -1;
 
         public static bool IsActive => isActive;
 
-        public static void Show(string text)
+        public static void Show(string text, bool centerBody = false)
         {
             body = text ?? string.Empty;
+            centerBodyText = centerBody;
             isActive = !string.IsNullOrEmpty(body);
             shownFrame = Time.frameCount;
         }
@@ -62,9 +65,10 @@ namespace MonsterMiner.UI
 
             EnsureStyles();
 
+            var style = centerBodyText ? centeredBodyStyle : bodyStyle;
             var content = new GUIContent(body);
             float textWidth = Mathf.Min(PanelWidth, Screen.width - 24f) - PanelPadding * 2f;
-            float textHeight = bodyStyle.CalcHeight(content, textWidth);
+            float textHeight = style.CalcHeight(content, textWidth);
             float panelWidth = Mathf.Min(PanelWidth, Screen.width - 24f);
             float panelHeight = PanelPadding + textHeight + 32f + ButtonHeight + 36f + 40f;
             panelHeight = Mathf.Min(panelHeight, Screen.height - 24f);
@@ -87,7 +91,7 @@ namespace MonsterMiner.UI
                     panelRect.width - PanelPadding * 2f,
                     textHeight),
                 content,
-                bodyStyle);
+                style);
 
             var okRect = new Rect(
                 panelRect.x + panelRect.width * 0.5f - ButtonWidth * 0.5f,
@@ -127,6 +131,11 @@ namespace MonsterMiner.UI
                 fontSize = 36,
                 wordWrap = true,
                 normal = { textColor = Color.white }
+            };
+
+            centeredBodyStyle = new GUIStyle(bodyStyle)
+            {
+                alignment = TextAnchor.MiddleCenter
             };
 
             footerStyle = new GUIStyle(GUI.skin.label)

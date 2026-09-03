@@ -14,6 +14,7 @@ namespace MonsterMiner.World
         const int MaxWorldPebbles = 5;
         const int InitialEggCount = 10;
         const int PlateauPebbleCount = 10;
+        const int JarlLandPebbleCount = 10;
         const int PlateauEggCount = 20;
         const int JarlLandEggCount = PlateauEggCount * 3;
         const float PebbleRespawnDelay = 10f;
@@ -31,6 +32,7 @@ namespace MonsterMiner.World
         int pendingPebbleRespawns;
         float pebbleRespawnTimer = -1f;
         bool huntGroundsSpawned;
+        bool jarlLandEggsSpawned;
 
         public void Initialize(CavernBounds cavernBounds, GameDatabase gameDatabase)
         {
@@ -53,6 +55,7 @@ namespace MonsterMiner.World
             SpawnInitialContent();
             SpawnInitialPebbles();
             SpawnPlateauPebbles();
+            SpawnJarlLandPebbles();
             SpawnPlateauEggs();
             SpawnJarlLandEggs();
             AssignStoredEggCreatureTypes();
@@ -228,6 +231,38 @@ namespace MonsterMiner.World
             }
         }
 
+        void SpawnJarlLandPebbles()
+        {
+            if (GameContext.Instance?.CaveProgression == null || !GameContext.Instance.CaveProgression.HasLandQuarry2)
+                return;
+
+            if (database == null || bounds == null)
+                return;
+
+            var pebbleItem = database.items.Find(i => i.itemId == "shiny_pebble");
+            if (pebbleItem == null)
+                return;
+
+            int spawned = 0;
+            int attempts = 0;
+            int maxAttempts = JarlLandPebbleCount * PlateauSpawnAttempts;
+            while (spawned < JarlLandPebbleCount && attempts < maxAttempts)
+            {
+                attempts++;
+                if (!bounds.TryGetRandomClearJarlLandPoint(PebbleClearanceRadius, 1, out var spawnPoint))
+                    continue;
+
+                var pickup = WorldPickup.Spawn(pebbleItem, 1, spawnPoint, trackAsWorldPebble: false);
+                if (pickup == null)
+                    continue;
+
+                if (contentRoot != null)
+                    pickup.transform.SetParent(contentRoot, true);
+
+                spawned++;
+            }
+        }
+
         public bool TrySpawnLandEgg(Vector3 spawnPoint, Transform parent = null)
         {
             if (bounds == null || database == null)
@@ -254,7 +289,7 @@ namespace MonsterMiner.World
             if (!bounds.IsClearForSpawnAt(spawnPoint, LandEggClearance))
                 return false;
 
-            if (!TryPickRandomLandCreature(out var creatureTypeId, out var definition))
+            if (!TryPickMapCreature(spawnPoint, out var creatureTypeId, out var definition))
                 return false;
 
             var monster = HatchMonster(spawnPoint, definition, creatureTypeId);
@@ -269,7 +304,7 @@ namespace MonsterMiner.World
 
         MonsterEgg FinishLandEggSpawn(Vector3 spawnPoint)
         {
-            if (!TryPickRandomLandCreature(out var creatureTypeId, out var definition))
+            if (!TryPickMapCreature(spawnPoint, out var creatureTypeId, out var definition))
                 return null;
 
             var egg = MonsterEgg.Spawn(spawnPoint, definition);
@@ -281,29 +316,6 @@ namespace MonsterMiner.World
                 egg.transform.SetParent(contentRoot, true);
 
             return egg;
-        }
-
-        bool TryPickRandomLandCreature(out string creatureTypeId, out MonsterDefinition definition)
-        {
-            creatureTypeId = null;
-            definition = null;
-
-            if (database?.monsters == null || database.monsters.Count == 0)
-                return false;
-
-            var candidates = new List<MonsterDefinition>();
-            foreach (var monster in database.monsters)
-            {
-                if (monster != null && !monster.isQuestBoss)
-                    candidates.Add(monster);
-            }
-
-            if (candidates.Count == 0)
-                return false;
-
-            definition = candidates[Random.Range(0, candidates.Count)];
-            creatureTypeId = definition.monsterId;
-            return !string.IsNullOrEmpty(creatureTypeId);
         }
 
         void SpawnPlateauEggs()
@@ -323,8 +335,19 @@ namespace MonsterMiner.World
             }
         }
 
+        public void EnsureJarlLandEggsSpawned()
+        {
+            if (jarlLandEggsSpawned || bounds == null || database == null)
+                return;
+
+            SpawnJarlLandEggs();
+        }
+
         void SpawnJarlLandEggs()
         {
+            if (jarlLandEggsSpawned)
+                return;
+
             if (GameContext.Instance?.CaveProgression == null || !GameContext.Instance.CaveProgression.HasLandQuarry2)
                 return;
 
@@ -341,6 +364,9 @@ namespace MonsterMiner.World
                 if (FinishEggSpawn(spawnPoint) != null)
                     spawned++;
             }
+
+            if (spawned > 0)
+                jarlLandEggsSpawned = true;
         }
 
         MonsterEgg FinishEggSpawn(Vector3 spawnPoint)
@@ -386,6 +412,8 @@ namespace MonsterMiner.World
                 ("salamander", Random.Range(1, 36))
             });
 
+            AssignJarlLandEggDistribution(eggsByMap);
+
             foreach (var pair in eggsByMap)
             {
                 for (int i = 0; i < pair.Value.Count; i++)
@@ -399,6 +427,29 @@ namespace MonsterMiner.World
 
                     egg.SetCreatureTypeId(creatureTypeId);
                 }
+            }
+        }
+
+        void AssignJarlLandEggDistribution(Dictionary<string, List<MonsterEgg>> eggsByMap)
+        {
+            if (!eggsByMap.TryGetValue(MapSpawnCatalog.JarlLandMapId, out var pool) || pool.Count == 0)
+                return;
+
+            var allowed = MapSpawnCatalog.GetCreaturesForMap(MapSpawnCatalog.JarlLandMapId);
+            if (allowed.Count == 0)
+                return;
+
+            int perType = Mathf.Max(1, pool.Count / allowed.Count);
+            for (int i = 0; i < allowed.Count; i++)
+                AssignCreatureType(pool, allowed[i], perType);
+
+            for (int i = 0; i < pool.Count; i++)
+            {
+                var egg = pool[i];
+                if (egg == null || !string.IsNullOrEmpty(egg.CreatureTypeId))
+                    continue;
+
+                egg.SetCreatureTypeId(allowed[Random.Range(0, allowed.Count)]);
             }
         }
 

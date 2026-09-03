@@ -51,8 +51,8 @@ namespace MonsterMiner.Util
             material.SetFloat("_MaxDist", halfDiameter);
             material.SetFloat("_MaxWaveDist", halfDiameter);
             material.SetFloat("_Edge_Offset", 0f);
-            material.SetFloat("_Displacement_Amount", 0.35f);
-            material.SetFloat("_Wave_Speed", 1.4f);
+            material.SetFloat("_Displacement_Amount", 0.04f);
+            material.SetFloat("_Wave_Speed", 0.45f);
         }
     }
 }

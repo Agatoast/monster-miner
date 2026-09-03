@@ -44,6 +44,9 @@ namespace MonsterMiner.Player
         bool holdingLeftHandItem;
         bool drivingPoseActive;
         bool boatSailViewActive;
+        float weaponRecoilKick;
+        const float WeaponRecoilRecoverySpeed = 16f;
+        const float WeaponRecoilKickMax = 5f;
 
         bool HoldingThrustWeapon => holdingKnife || holdingSpear;
 
@@ -61,6 +64,11 @@ namespace MonsterMiner.Player
         }
 
         public Transform LeftHandAnchor => hands?.LeftHandAnchor;
+
+        public void ApplyWeaponKick(float strength)
+        {
+            weaponRecoilKick = Mathf.Min(weaponRecoilKick + strength, WeaponRecoilKickMax);
+        }
 
         public bool TryGetRightHandScreenPoint(out Vector2 guiPoint)
         {
@@ -128,6 +136,8 @@ namespace MonsterMiner.Player
 
             if (heldVisual == null || hands == null || !hands.HasMesh || controller?.ViewCamera == null)
                 return;
+
+            RecoverWeaponRecoil();
 
             if (holdingLeftHandItem)
             {
@@ -227,7 +237,9 @@ namespace MonsterMiner.Player
                 KnifeScreenVerticalTwistDegrees,
                 camera.transform.up);
             Quaternion restRotation = screenVerticalTwist * gripPointRotation;
-            heldVisual.SetPositionAndRotation(gripPointWorld + worldOffset, restRotation);
+            heldVisual.SetPositionAndRotation(
+                gripPointWorld + worldOffset + GetWeaponRecoilOffset(camera),
+                GetWeaponRecoilRotation(camera) * restRotation);
         }
 
         void ApplyHeldPickaxeOffset()
@@ -290,7 +302,7 @@ namespace MonsterMiner.Player
             Vector3 chopAxis = (camera.transform.right - 0.3f * camera.transform.up).normalized;
             Quaternion chopRotation = Quaternion.AngleAxis(swing * 58f, chopAxis);
             Quaternion restRotation = screenVerticalTwist * gripPointRotation;
-            Vector3 restPosition = gripPointWorld + worldOffset;
+            Vector3 restPosition = gripPointWorld + worldOffset + GetWeaponRecoilOffset(camera);
             Vector3 scaledPivot = Vector3.Scale(swingPivotLocal, heldVisual.lossyScale);
             Vector3 basePivotWorld = restPosition + restRotation * scaledPivot;
             Vector3 pivotWorld = basePivotWorld + hands.GetScreenWorldOffset(
@@ -298,9 +310,34 @@ namespace MonsterMiner.Player
                 basePivotWorld,
                 PickaxeSwingPivotPixelOffset);
             Vector3 finalPosition = pivotWorld + chopRotation * (restPosition - pivotWorld);
-            Quaternion finalRotation = chopRotation * restRotation;
+            Quaternion finalRotation = GetWeaponRecoilRotation(camera) * chopRotation * restRotation;
 
             heldVisual.SetPositionAndRotation(finalPosition, finalRotation);
+        }
+
+        void RecoverWeaponRecoil()
+        {
+            if (weaponRecoilKick <= 0f)
+                return;
+
+            weaponRecoilKick = Mathf.MoveTowards(weaponRecoilKick, 0f, Time.deltaTime * WeaponRecoilRecoverySpeed);
+        }
+
+        Vector3 GetWeaponRecoilOffset(Camera camera)
+        {
+            if (weaponRecoilKick <= 0f)
+                return Vector3.zero;
+
+            return -camera.transform.forward * (weaponRecoilKick * 0.045f)
+                + camera.transform.up * (-weaponRecoilKick * 0.018f);
+        }
+
+        Quaternion GetWeaponRecoilRotation(Camera camera)
+        {
+            if (weaponRecoilKick <= 0f)
+                return Quaternion.identity;
+
+            return Quaternion.AngleAxis(-weaponRecoilKick * 5f, camera.transform.right);
         }
 
         void ApplyHeldLeftHandItemScreenOffset()

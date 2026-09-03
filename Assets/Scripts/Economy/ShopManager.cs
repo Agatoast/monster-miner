@@ -20,8 +20,11 @@ namespace MonsterMiner.Economy
         ShopBuyStation buyStation;
         ShopBuyStation activeBuyStation;
         string currentMapId = MapIdFirstCave;
+        bool suppressCloseUntilEUp;
 
         public bool IsMenuOpen { get; private set; }
+
+        public bool ShouldIgnoreCloseE() => suppressCloseUntilEUp;
 
         public void Initialize(Transform boardTransform)
         {
@@ -61,35 +64,12 @@ namespace MonsterMiner.Economy
 
         void Update()
         {
+            if (IsMenuOpen && suppressCloseUntilEUp && !Input.GetKey(KeyCode.E))
+                suppressCloseUntilEUp = false;
+
             UI.ShopBuyMenuDisplay.HandleInput(this);
 
-            if (GameContext.Instance?.IsPlayerDead == true)
-            {
-                if (IsMenuOpen)
-                    CloseMenu();
-                return;
-            }
-
-            if (!IsMenuOpen || buyStations.Count == 0)
-                return;
-
-            var player = GameContext.Instance?.Player;
-            var interactor = player != null ? player.GetComponent<Interactor>() : null;
-            if (interactor == null)
-                return;
-
-            bool inRange = false;
-            for (int i = 0; i < buyStations.Count; i++)
-            {
-                var station = buyStations[i];
-                if (station != null && interactor.IsInInteractionRange(station))
-                {
-                    inRange = true;
-                    break;
-                }
-            }
-
-            if (!inRange)
+            if (GameContext.Instance?.IsPlayerDead == true && IsMenuOpen)
                 CloseMenu();
         }
 
@@ -97,6 +77,7 @@ namespace MonsterMiner.Economy
         {
             activeBuyStation = station;
             IsMenuOpen = true;
+            suppressCloseUntilEUp = Input.GetKey(KeyCode.E);
             RebuildMenuEntries();
         }
 
@@ -108,6 +89,7 @@ namespace MonsterMiner.Economy
         public void CloseMenu()
         {
             IsMenuOpen = false;
+            suppressCloseUntilEUp = false;
         }
 
         public void SetCurrentMapId(string mapId)
@@ -150,27 +132,57 @@ namespace MonsterMiner.Economy
             AddInventoryEntry(ctx);
             AddWaterEntry(ctx);
 
-            foreach (var mapItem in GetMapShopItems(ctx))
-                menuEntries.Add(mapItem);
-
-            AddLureEntries(ctx);
+            AddWeaponEntries(ctx);
+            AddFinderEntries(ctx);
         }
 
-        void AddLureEntries(GameContext ctx)
+        void AddWeaponEntries(GameContext ctx)
         {
+            AddKnifeShopEntry(ctx);
+            AddWeaponShopEntry(ctx, ctx.Database.spearListing);
+
+            if (activeBuyStation != null && activeBuyStation.IsJarlLandShop)
+            {
+                AddWeaponShopEntry(ctx, ctx.Database.pistolListing);
+                AddFixedPriceShopEntry(ctx, ctx.Database.grenadeListing);
+            }
+        }
+
+        void AddKnifeShopEntry(GameContext ctx)
+        {
+            var knife = ctx.Database.knifeMapListing;
+            if (knife == null)
+                return;
+
+            bool alreadyOwned = PlayerOwnsItem(ctx, knife.unlockItem);
+            bool alreadyBought = GetPurchaseCount(knife.upgradeId) >= knife.maxPurchases;
+            bool canBuy = !alreadyOwned && !alreadyBought;
+            int cost = GetEscalatingCost(knife.cost, GetPurchaseCount(knife.upgradeId));
+
+            menuEntries.Add(new ShopMenuEntry(
+                knife.upgradeId,
+                knife.displayName,
+                cost,
+                canBuy,
+                canBuy ? null : alreadyOwned ? "OWNED" : "SOLD"));
+        }
+
+        void AddFinderEntries(GameContext ctx)
+        {
+            if (activeBuyStation != null && activeBuyStation.IsJarlLandShop)
+            {
+                var listings = ctx.Database.jarlLandFinderListings;
+                for (int i = 0; i < listings.Count; i++)
+                    AddFixedPriceShopEntry(ctx, listings[i]);
+                return;
+            }
+
             AddFixedPriceShopEntry(ctx, ctx.Database.caveRatFinderListing);
             AddFixedPriceShopEntry(ctx, ctx.Database.lizardLureListing);
             AddFixedPriceShopEntry(ctx, ctx.Database.rabbitFinderListing);
             AddFixedPriceShopEntry(ctx, ctx.Database.caveLizardFinderListing);
             AddFixedPriceShopEntry(ctx, ctx.Database.salamanderLureListing);
-            if (activeBuyStation == null || !activeBuyStation.IsJarlLandShop)
-                AddFixedPriceShopEntry(ctx, ctx.Database.phoenixLureListing);
-            AddWeaponShopEntry(ctx, ctx.Database.spearListing);
-            AddWeaponShopEntry(ctx, ctx.Database.pistolListing);
-            AddWeaponShopEntry(ctx, ctx.Database.rifleListing);
-            AddWeaponShopEntry(ctx, ctx.Database.shotgunListing);
-            AddWeaponShopEntry(ctx, ctx.Database.machinegunListing);
-            AddFixedPriceShopEntry(ctx, ctx.Database.grenadeListing);
+            AddFixedPriceShopEntry(ctx, ctx.Database.phoenixLureListing);
         }
 
         void AddWeaponShopEntry(GameContext ctx, ShopUpgradeDefinition listing)
@@ -309,28 +321,6 @@ namespace MonsterMiner.Economy
                 "Water",
                 cost,
                 true));
-        }
-
-        IEnumerable<ShopMenuEntry> GetMapShopItems(GameContext ctx)
-        {
-            if (currentMapId != MapIdFirstCave)
-                yield break;
-
-            var knife = ctx.Database.knifeMapListing;
-            if (knife == null)
-                yield break;
-
-            bool alreadyOwned = PlayerOwnsItem(ctx, knife.unlockItem);
-            bool alreadyBought = GetPurchaseCount(knife.upgradeId) >= knife.maxPurchases;
-            bool canBuy = !alreadyOwned && !alreadyBought;
-            int cost = GetEscalatingCost(knife.cost, GetPurchaseCount(knife.upgradeId));
-
-            yield return new ShopMenuEntry(
-                knife.upgradeId,
-                knife.displayName,
-                cost,
-                canBuy,
-                canBuy ? null : alreadyOwned ? "OWNED" : "SOLD");
         }
 
         bool TryPurchaseById(string entryId)
@@ -485,6 +475,9 @@ namespace MonsterMiner.Economy
 
         static bool IsFixedPriceListing(ShopUpgradeDefinition upgrade)
         {
+            if (upgrade?.unlockItem != null && upgrade.unlockItem.isEggFinder)
+                return true;
+
             return upgrade.upgradeId == "gremlin_finder_shop"
                 || upgrade.upgradeId == "lizard_lure_shop"
                 || upgrade.upgradeId == "rabbit_finder_shop"

@@ -83,6 +83,7 @@ namespace MonsterMiner.World
             BuildPlayerShopArea(root, hall, bounds, floorWorldY);
             ConfigureJarlLandSpawnExclusions(bounds, root, hall);
             LakeBuilder.Build(parent, bounds);
+            PlainsWorldBuilder.RebuildGroundExcludingLandFeatures(parent, bounds);
         }
 
         static void DestroyExistingChild(Transform parent, string childName)

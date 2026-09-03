@@ -1,12 +1,15 @@
 using MonsterMiner.Economy;
+using MonsterMiner.Interaction;
 using UnityEngine;
 
 namespace MonsterMiner.UI
 {
     public static class JarlDialogueDisplay
     {
-        const float PanelWidth = 720f;
         const float PanelPadding = 16f;
+        const float MaxPromptWidth = 420f;
+        const float MinPromptWidth = 180f;
+        const float HeadGapPixels = 8f;
         static readonly Color PanelBackground = new Color(0f, 0f, 0f, 0.88f);
 
         static GUIStyle bodyStyle;
@@ -16,29 +19,44 @@ namespace MonsterMiner.UI
             if (jarl == null || camera == null)
                 return;
 
+            DrawNamePlaque(jarl, camera, InteractPromptDisplay.FormatPrompt(jarl.GetPrompt()));
+        }
+
+        public static void Draw(Quarry3QuestNpc guide, Camera camera)
+        {
+            if (guide == null || camera == null)
+                return;
+
+            DrawNamePlaque(guide, camera, InteractPromptDisplay.FormatPrompt(guide.GetPrompt()));
+        }
+
+        public static void Draw(WarrensonBoatNpc warrenson, Camera camera)
+        {
+            if (warrenson == null || camera == null)
+                return;
+
+            DrawNamePlaque(warrenson, camera, InteractPromptDisplay.FormatPrompt(warrenson.GetPrompt()));
+        }
+
+        static void DrawNamePlaque(IInteractPromptBounds npc, Camera camera, string prompt)
+        {
+            if (npc == null || camera == null || string.IsNullOrEmpty(prompt))
+                return;
+
+            if (!npc.TryGetPromptScreenRect(camera, out var headBounds))
+                return;
+
             EnsureStyles();
 
-            string prompt = InteractPromptDisplay.FormatPrompt(jarl.GetPrompt());
             var content = new GUIContent(prompt);
-            float textHeight = bodyStyle.CalcHeight(content, PanelWidth - PanelPadding * 2f);
+            float textWidth = Mathf.Min(MaxPromptWidth, Mathf.Max(MinPromptWidth, headBounds.width)) - PanelPadding * 2f;
+            float textHeight = bodyStyle.CalcHeight(content, textWidth);
+            float panelWidth = textWidth + PanelPadding * 2f;
             float panelHeight = textHeight + PanelPadding * 2f;
+            float panelX = headBounds.center.x - panelWidth * 0.5f;
+            float panelY = headBounds.yMin - panelHeight - HeadGapPixels;
 
-            if (!jarl.TryGetDialogueAnchorScreenPoint(camera, out var shoulderGui))
-            {
-                float fallbackX = Screen.width * 0.5f - PanelWidth * 0.5f;
-                float fallbackY = Screen.height * 0.5f + 34f;
-                DrawPanel(new Rect(fallbackX, fallbackY, PanelWidth, panelHeight), prompt);
-                return;
-            }
-
-            const float shoulderGapX = 14f;
-            const float shoulderGapY = 18f;
-            float panelX = shoulderGui.x - PanelWidth - shoulderGapX;
-            float panelY = shoulderGui.y - panelHeight - shoulderGapY;
-            panelX = Mathf.Clamp(panelX, 12f, Screen.width - PanelWidth - 12f);
-            panelY = Mathf.Clamp(panelY, 12f, Screen.height - panelHeight - 12f);
-
-            DrawPanel(new Rect(panelX, panelY, PanelWidth, panelHeight), prompt);
+            DrawPanel(new Rect(panelX, panelY, panelWidth, panelHeight), prompt);
         }
 
         static void DrawPanel(Rect panelRect, string prompt)

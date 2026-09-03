@@ -43,7 +43,7 @@ namespace MonsterMiner.Util
         const float DeckGridCellFeet = 0.1f;
         const int DeckRenderQueue = 3100;
         const float BeachBoatOcclusionBlockWidthFeet = 10f;
-        const float BeachBoatOcclusionBlockLengthFeet = 10f;
+        const float BeachBoatOcclusionBlockLengthFeet = 40f;
         const float BeachBoatOcclusionRampNorthHeightFeet = 2f;
         const float BeachBoatOcclusionBlockNorthOffsetFeet = 1f;
         static readonly Color BoatWalkDeckColor = new Color(1f, 1f, 207f / 255f, 1f); // #FFFFCF
@@ -89,7 +89,8 @@ namespace MonsterMiner.Util
                 return;
 
             float halfLength = WorldScale.Feet(BeachBoatOcclusionBlockLengthFeet * 0.5f);
-            float blockContentZ = waterlineContentZ - halfLength + WorldScale.Feet(BeachBoatOcclusionBlockNorthOffsetFeet);
+            float northEdgeZ = waterlineContentZ + WorldScale.Feet(BeachBoatOcclusionBlockNorthOffsetFeet);
+            float blockContentZ = northEdgeZ - halfLength;
             float plainsBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
             float sandLocalY = PlainsWorldBuilder.SamplePlainsLocalY(alignContentX, blockContentZ, plainsBase);
             float halfWidth = WorldScale.Feet(BeachBoatOcclusionBlockWidthFeet * 0.5f);
@@ -105,9 +106,9 @@ namespace MonsterMiner.Util
             meshFilter.sharedMesh = BuildBeachBoatOcclusionRampMesh(halfWidth, halfLength, northHeight);
 
             var meshRenderer = rampGo.AddComponent<MeshRenderer>();
-            meshRenderer.sharedMaterial = PrimitiveFactory.CreateColorMaterial(BeachBoatOcclusionWoodColor);
-            meshRenderer.shadowCastingMode = ShadowCastingMode.On;
-            meshRenderer.receiveShadows = true;
+            meshRenderer.sharedMaterial = CavernSurfaceMaterialFactory.GetSnowMaterial();
+            meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            meshRenderer.receiveShadows = false;
 
             var meshCollider = rampGo.AddComponent<MeshCollider>();
             meshCollider.sharedMesh = meshFilter.sharedMesh;

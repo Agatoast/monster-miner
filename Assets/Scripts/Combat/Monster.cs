@@ -35,6 +35,7 @@ namespace MonsterMiner.Combat
         bool isInAir;
         Vector3 wanderDirection;
         float wanderDirectionTimer;
+        Vector3 islandMoveVelocity;
 
         public bool IsCarried => isCarried;
         public bool IsInAir => isInAir;
@@ -79,7 +80,8 @@ namespace MonsterMiner.Combat
             monster.AlignToGround(position, immediate: true);
 
             EnforcePlateauShellIfNeeded(go);
-            monster.AlignToGround(go.transform.position, immediate: true);
+            if (def?.monsterId != "island_taipan")
+                monster.AlignToGround(go.transform.position, immediate: true);
 
             var body = go.GetComponent<Rigidbody>();
             if (body != null)
@@ -110,6 +112,9 @@ namespace MonsterMiner.Combat
             if (def.visualPrefabResourcePath == "Models/Creatures/pentachick")
                 return PentachickVisualFactory.CreateMonster(position, def.scale, def.displayName);
 
+            if (def.visualPrefabResourcePath == "Models/Creatures/taipan")
+                return TaipanVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
             var prefab = Resources.Load<GameObject>(def.visualPrefabResourcePath);
             if (prefab == null)
                 return null;
@@ -136,10 +141,15 @@ namespace MonsterMiner.Combat
             }
 
             Physics.SyncTransforms();
-            float bottomY = FloorAnchor.GetBottomY(gameObject);
-            groundOffset = transform.position.y - bottomY + GroundRestOffset;
-            if (groundOffset < GroundRestOffset)
-                groundOffset = GroundRestOffset;
+            if (IsIslandTaipan)
+                IgnoreIslandTerrainCollision();
+            else
+            {
+                float bottomY = FloorAnchor.GetBottomY(gameObject);
+                groundOffset = transform.position.y - bottomY + GroundRestOffset;
+                if (groundOffset < GroundRestOffset)
+                    groundOffset = GroundRestOffset;
+            }
 
             var ctx = GameContext.Instance;
             if (ctx?.Player != null)
@@ -148,19 +158,83 @@ namespace MonsterMiner.Combat
 
         void TryMove(Vector3 worldDelta)
         {
+            if (IsIslandTaipan)
+            {
+                TryMoveOnIsland(worldDelta);
+                return;
+            }
+
             Vector3 next = (rb != null ? rb.position : transform.position) + worldDelta;
             AlignToGround(next);
         }
 
+        void TryMoveOnIsland(Vector3 worldDelta)
+        {
+            Vector3 current = transform.position;
+            Vector3 target = current + worldDelta;
+            target.y = current.y;
+
+            const float smoothTime = 0.08f;
+            Vector3 next = Vector3.SmoothDamp(current, target, ref islandMoveVelocity, smoothTime, float.MaxValue, Time.fixedDeltaTime);
+            next.y = current.y;
+            SetIslandWorldPosition(next);
+        }
+
+        void SetIslandWorldPosition(Vector3 worldPos)
+        {
+            transform.position = worldPos;
+            if (rb != null)
+            {
+                rb.position = worldPos;
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+        }
+
+        void IgnoreIslandTerrainCollision()
+        {
+            if (bodyCollider == null)
+                return;
+
+            var islandCollider = LakeIslandVisualFactory.IslandTerrainCollider;
+            if (islandCollider != null)
+                Physics.IgnoreCollision(bodyCollider, islandCollider, true);
+        }
+
         bool IsPentachick => definition != null && definition.monsterId == "pentachick";
+        bool IsIslandTaipan => definition != null && definition.monsterId == "island_taipan";
+
+        public void AlignToIslandSurface(CavernBounds bounds)
+        {
+            if (bounds == null)
+                return;
+
+            TaipanVisualFactory.PrepareAnimatedGroundSample(gameObject);
+            GetComponent<TaipanGroundAlign>()?.AlignVisualBottomToIsland(immediate: true);
+            IgnoreIslandTerrainCollision();
+        }
 
         void BeginSpawnDrop()
         {
-            spawnHover = IsPentachick ? 0f : WorldScale.SpawnDropHeight;
+            spawnHover = IsPentachick || definition?.monsterId == "island_taipan"
+                ? 0f
+                : WorldScale.SpawnDropHeight;
         }
 
         void AlignToGround(Vector3 worldPos, bool immediate = false)
         {
+            if (IsIslandTaipan)
+            {
+                SetIslandWorldPosition(new Vector3(worldPos.x, transform.position.y, worldPos.z));
+                if (immediate)
+                {
+                    TaipanVisualFactory.PrepareAnimatedGroundSample(gameObject);
+                    GetComponent<TaipanGroundAlign>()?.AlignVisualBottomToIsland(immediate: true);
+                }
+
+                return;
+            }
+
             var bounds = GameContext.Instance?.CavernBounds;
             if (bounds != null)
             {
@@ -294,6 +368,12 @@ namespace MonsterMiner.Combat
             if (definition == null)
                 return;
 
+            if (IsIslandTaipan && !IsPlayerOnWalkableIsland())
+            {
+                WanderOnIsland();
+                return;
+            }
+
             if (GameContext.Instance?.IsPlayerDead == true)
             {
                 if (forceFlee || definition.fleesFromPlayer)
@@ -304,14 +384,21 @@ namespace MonsterMiner.Combat
             var toPlayer = player.position - transform.position;
             toPlayer.y = 0f;
 
-            float noticeDistance = WorldScale.Feet(PlayerNoticeDistanceFeet);
-            float noticeDistanceSqr = noticeDistance * noticeDistance;
-            bool playerNear = toPlayer.sqrMagnitude <= noticeDistanceSqr;
+            bool alwaysChase = definition.alwaysChasePlayer;
+            if (!alwaysChase && definition.chaseWhenPlayerOnIsland)
+                alwaysChase = IsPlayerOnWalkableIsland();
 
-            if (!playerNear)
+            if (!alwaysChase)
             {
-                Wander();
-                return;
+                float noticeDistance = WorldScale.Feet(PlayerNoticeDistanceFeet);
+                float noticeDistanceSqr = noticeDistance * noticeDistance;
+                bool playerNear = toPlayer.sqrMagnitude <= noticeDistanceSqr;
+
+                if (!playerNear)
+                {
+                    Wander();
+                    return;
+                }
             }
 
             if (toPlayer.sqrMagnitude <= 0.01f)
@@ -336,6 +423,7 @@ namespace MonsterMiner.Combat
                 GetComponent<CaveLizardLocomotion>()?.PlayAttack();
                 GetComponent<GremlinLocomotion>()?.PlayAttack();
                 GetComponent<SalamanderLocomotion>()?.PlayAttack();
+                GetComponent<TaipanLocomotion>()?.PlayAttack();
                 var health = player.GetComponent<Player.PlayerHealth>();
                 health?.TakeDamage(definition.attackDamage);
                 var playerRb = player.GetComponent<Rigidbody>();
@@ -357,6 +445,82 @@ namespace MonsterMiner.Combat
             float speedMph = forceFlee ? definition.moveSpeedMph * 1.35f : definition.moveSpeedMph;
             TryMove(fleeDir * GetMoveUnitsPerSecond(speedMph) * Time.fixedDeltaTime);
             transform.rotation = Quaternion.LookRotation(fleeDir);
+        }
+
+        void WanderOnIsland()
+        {
+            if (definition == null)
+                return;
+
+            wanderDirectionTimer -= Time.fixedDeltaTime;
+            if (wanderDirectionTimer <= 0f)
+                PickNewIslandWanderDirection();
+
+            if (wanderDirection.sqrMagnitude <= 0.001f)
+                return;
+
+            TryMove(wanderDirection * GetMoveUnitsPerSecond(definition.moveSpeedMph * WanderSpeedMultiplier) * Time.fixedDeltaTime);
+            transform.rotation = Quaternion.LookRotation(wanderDirection);
+            KeepOnIsland(ref wanderDirection);
+        }
+
+        void PickNewIslandWanderDirection()
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds == null)
+            {
+                PickNewWanderDirection();
+                return;
+            }
+
+            if (Random.value < WanderPauseChance)
+            {
+                wanderDirection = Vector3.zero;
+                wanderDirectionTimer = Random.Range(WanderPauseMinSeconds, WanderPauseMaxSeconds);
+                return;
+            }
+
+            Vector3 contentLocal = bounds.transform.InverseTransformPoint(transform.position);
+            Vector2 center = LakeCatalog.GetLakeIslandCenterLocal();
+            Vector2 toCenter = center - new Vector2(contentLocal.x, contentLocal.z);
+            if (toCenter.sqrMagnitude < 0.0001f)
+                toCenter = Random.insideUnitCircle.normalized;
+            else
+                toCenter.Normalize();
+
+            float wanderAngle = Random.Range(-70f, 70f);
+            Vector3 tangent = new Vector3(-toCenter.y, 0f, toCenter.x);
+            wanderDirection = (new Vector3(toCenter.x, 0f, toCenter.y) * 0.35f + tangent * Mathf.Sin(wanderAngle * Mathf.Deg2Rad)).normalized;
+            if (wanderDirection.sqrMagnitude <= 0.001f)
+                wanderDirection = new Vector3(toCenter.x, 0f, toCenter.y);
+
+            wanderDirectionTimer = Random.Range(WanderMinSeconds, WanderMaxSeconds);
+        }
+
+        void KeepOnIsland(ref Vector3 direction)
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds == null || !LakeCatalog.HasLakeIsland)
+                return;
+
+            Vector3 contentLocal = bounds.transform.InverseTransformPoint(transform.position);
+            if (LakeIslandVisualFactory.IsIslandWalkableLandLocal(contentLocal.x, contentLocal.z, bounds.transform))
+                return;
+
+            Vector2 center = LakeCatalog.GetLakeIslandCenterLocal();
+            direction = new Vector3(center.x - contentLocal.x, 0f, center.y - contentLocal.z).normalized;
+            transform.rotation = Quaternion.LookRotation(direction);
+        }
+
+        static bool IsPlayerOnWalkableIsland()
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            var player = GameContext.Instance?.Player;
+            if (bounds == null || player == null || !LakeCatalog.HasLakeIsland)
+                return false;
+
+            Vector3 contentLocal = bounds.transform.InverseTransformPoint(player.transform.position);
+            return LakeIslandVisualFactory.IsIslandWalkableLandLocal(contentLocal.x, contentLocal.z, bounds.transform);
         }
 
         void Wander()

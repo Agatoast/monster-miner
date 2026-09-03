@@ -75,6 +75,61 @@ namespace MonsterMiner.Util
             return character;
         }
 
+        public static GameObject CreateQuarry3QuestNpc(
+            Transform parent,
+            Vector3 localPosition,
+            Quaternion localRotation,
+            float floorWorldY)
+        {
+            return CreateQuestNpc<Quarry3QuestNpc>(
+                NormalManResourcePath,
+                "Quarry3Guide",
+                parent,
+                localPosition,
+                localRotation,
+                floorWorldY);
+        }
+
+        public static GameObject CreateWarrensonNpc(
+            Transform parent,
+            Vector3 localPosition,
+            Quaternion localRotation,
+            float floorWorldY)
+        {
+            return CreateQuestNpc<WarrensonBoatNpc>(
+                NormalManResourcePath,
+                WarrensonBoatNpc.CharacterName,
+                parent,
+                localPosition,
+                localRotation,
+                floorWorldY);
+        }
+
+        static GameObject CreateQuestNpc<TNpc>(
+            string resourcePath,
+            string objectName,
+            Transform parent,
+            Vector3 localPosition,
+            Quaternion localRotation,
+            float floorWorldY) where TNpc : MonoBehaviour
+        {
+            var character = CreateCharacter(
+                resourcePath,
+                objectName,
+                parent,
+                localPosition,
+                localRotation,
+                floorWorldY);
+            if (character == null)
+                return null;
+
+            var interactCollider = character.AddComponent<BoxCollider>();
+            FitBoxColliderToCharacterBody(character, interactCollider);
+            interactCollider.isTrigger = true;
+            character.AddComponent<TNpc>();
+            return character;
+        }
+
         static GameObject CreateCharacter(
             string resourcePath,
             string objectName,

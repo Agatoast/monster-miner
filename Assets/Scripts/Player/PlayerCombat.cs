@@ -141,6 +141,7 @@ namespace MonsterMiner.Player
         void ApplyWeaponRecoil(float degrees)
         {
             controller?.ApplyViewRecoil(degrees);
+            hands?.ApplyWeaponKick(degrees * 0.35f);
         }
 
         void PerformSingleShotAttack(float damage)

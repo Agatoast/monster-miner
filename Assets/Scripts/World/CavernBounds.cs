@@ -320,7 +320,8 @@ namespace MonsterMiner.World
                 if (!IsWalkableLocalPoint(localHit.x, localHit.z))
                     continue;
 
-                if (LakeIslandVisualFactory.IsOverDryLand(localHit.x, localHit.z, transform)
+                if (LakeCatalog.IsWalkableLandLocal(localHit.x, localHit.z, transform)
+                    && LakeCatalog.IsLakeIslandLocal(localHit.x, localHit.z)
                     && !FloorColliderUtility.IsLakeIslandTerrainCollider(hit.collider))
                     continue;
 

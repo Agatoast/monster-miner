@@ -22,6 +22,9 @@ namespace MonsterMiner.Player
         Transform head;
         CapsuleCollider bodyCollider;
         float pitch;
+        float viewRecoilKick;
+        const float ViewRecoilRecoverySpeed = 14f;
+        const float ViewRecoilKickMax = 18f;
         bool groundedLastFrame;
         bool gameplayCursorLocked = true;
         bool jumpRequested;
@@ -96,6 +99,7 @@ namespace MonsterMiner.Player
         {
             ApplyCursorState();
             HandleLook();
+            RecoverViewRecoil();
         }
 
         void OnApplicationFocus(bool hasFocus)
@@ -249,13 +253,14 @@ namespace MonsterMiner.Player
             if (mount != null && mount.IsDrivingBoat)
             {
                 pitch = 0f;
+                viewRecoilKick = 0f;
                 head.localRotation = Quaternion.identity;
                 return;
             }
 
             if (mount != null && mount.IsDriving && mount.CurrentTruck != null)
             {
-                head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+                ApplyHeadRotation();
                 return;
             }
 
@@ -265,7 +270,7 @@ namespace MonsterMiner.Player
                 pitch -= Input.GetAxis("Mouse Y") * mouseSensitivity;
                 pitch = Mathf.Clamp(pitch, -85f, 85f);
                 transform.Rotate(0f, cargoYaw, 0f, Space.Self);
-                head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+                ApplyHeadRotation();
                 return;
             }
 
@@ -279,7 +284,24 @@ namespace MonsterMiner.Player
             pitch -= Input.GetAxis("Mouse Y") * mouseSensitivity;
             pitch = Mathf.Clamp(pitch, -85f, 85f);
             transform.Rotate(0f, freeYaw, 0f);
-            head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+            ApplyHeadRotation();
+        }
+
+        void RecoverViewRecoil()
+        {
+            if (head == null || Mathf.Abs(viewRecoilKick) <= 0.01f)
+                return;
+
+            viewRecoilKick = Mathf.MoveTowards(viewRecoilKick, 0f, Time.deltaTime * ViewRecoilRecoverySpeed);
+            ApplyHeadRotation();
+        }
+
+        void ApplyHeadRotation()
+        {
+            if (head == null)
+                return;
+
+            head.localRotation = Quaternion.Euler(pitch + viewRecoilKick, 0f, 0f);
         }
 
         bool IsGrounded()
@@ -337,8 +359,8 @@ namespace MonsterMiner.Player
         public void ResetViewPitch(float newPitch = 0f)
         {
             pitch = newPitch;
-            if (head != null)
-                head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+            viewRecoilKick = 0f;
+            ApplyHeadRotation();
         }
 
         public void ApplyViewRecoil(float degrees)
@@ -346,9 +368,8 @@ namespace MonsterMiner.Player
             if (degrees <= 0f || head == null)
                 return;
 
-            pitch -= degrees;
-            pitch = Mathf.Clamp(pitch, -85f, 85f);
-            head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+            viewRecoilKick = Mathf.Clamp(viewRecoilKick - degrees, -ViewRecoilKickMax, 0f);
+            ApplyHeadRotation();
         }
 
         public void Respawn(Vector3 spawnPoint)
@@ -359,6 +380,7 @@ namespace MonsterMiner.Player
             transform.position = SnapToFloor(spawnPoint);
             transform.rotation = Quaternion.identity;
             pitch = 0f;
+            viewRecoilKick = 0f;
             if (head != null)
                 head.localRotation = Quaternion.identity;
             LockCursorToCenter();

@@ -69,6 +69,25 @@ namespace MonsterMiner.Util
             return FloorColliderUtility.TryResolveFloorPoint(worldPoint, rayHeight, maxDistance, out floorPoint);
         }
 
+        public static float GetVisualBottomY(GameObject go)
+        {
+            Physics.SyncTransforms();
+
+            float bottomY = float.MaxValue;
+            bool found = false;
+
+            foreach (var renderer in go.GetComponentsInChildren<Renderer>())
+            {
+                if (renderer == null || !renderer.enabled)
+                    continue;
+
+                bottomY = Mathf.Min(bottomY, renderer.bounds.min.y);
+                found = true;
+            }
+
+            return found ? bottomY : go.transform.position.y;
+        }
+
         public static float GetBottomY(GameObject go)
         {
             Physics.SyncTransforms();

@@ -588,7 +588,11 @@ namespace MonsterMiner.Player
             float groundWorldY = bounds.transform.TransformPoint(new Vector3(local.x, groundY, local.z)).y;
 
             Vector3 pos = rb.position;
-            if (LakeCatalog.IsBoatNavigableLocal(local.x, local.z))
+            if (LakeCatalog.IsOpenWaterLocal(local.x, local.z))
+                pos.y = waterWorldY + bottomOffset;
+            else if (LakeCatalog.IsBeachLocal(local.x, local.z))
+                pos.y = groundWorldY + bottomOffset;
+            else if (LakeCatalog.IsBoatNavigableLocal(local.x, local.z))
                 pos.y = waterWorldY + bottomOffset;
             else
                 pos.y = groundWorldY + bottomOffset;

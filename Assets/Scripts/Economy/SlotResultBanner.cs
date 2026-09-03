@@ -109,7 +109,13 @@ namespace MonsterMiner.Economy
 
             overlayObject.transform.position = worldCenter + planeNormal * SurfaceOffset;
             overlayObject.transform.rotation = Quaternion.LookRotation(planeNormal, planeUp);
-            overlayObject.transform.localScale = new Vector3(worldWidth, worldHeight, 1f);
+
+            Transform parent = overlayObject.transform.parent;
+            Vector3 parentScale = parent != null ? parent.lossyScale : Vector3.one;
+            overlayObject.transform.localScale = new Vector3(
+                worldWidth / Mathf.Max(0.0001f, parentScale.x),
+                worldHeight / Mathf.Max(0.0001f, parentScale.y),
+                1f / Mathf.Max(0.0001f, parentScale.z));
         }
 
         static Mesh CreateUnitQuadMesh()
@@ -149,29 +155,55 @@ namespace MonsterMiner.Economy
             width = 0f;
             height = 0f;
 
+            if (slotMachineRoot == null)
+                return false;
+
             var spinRenderers = CollectSpinRenderers(slotMachineRoot);
             if (spinRenderers.Count == 0)
                 return false;
 
-            Transform reference = spinRenderers[0].transform;
+            Transform face = slotMachineRoot.transform;
+            normal = face.forward.sqrMagnitude > 0.0001f ? face.forward.normalized : Vector3.forward;
+            up = face.up.sqrMagnitude > 0.0001f ? face.up.normalized : Vector3.up;
+            Vector3 right = face.right.sqrMagnitude > 0.0001f ? face.right.normalized : Vector3.right;
+
             Bounds reelBounds = spinRenderers[0].bounds;
             for (int i = 1; i < spinRenderers.Count; i++)
                 reelBounds.Encapsulate(spinRenderers[i].bounds);
 
-            up = reference.up;
-            if (Vector3.Dot(up, Vector3.up) < 0f)
-                up = -up;
-
-            normal = slotMachineRoot.transform.forward;
-            if (normal.sqrMagnitude < 0.0001f)
-                normal = Vector3.forward;
-            else
-                normal.Normalize();
-
+            width = MeasureBoundsExtent(reelBounds, right);
+            float fullHeight = MeasureBoundsExtent(reelBounds, up);
+            height = fullHeight / 3f;
             center = reelBounds.center;
-            width = reelBounds.size.x;
-            height = reelBounds.size.y / 3f;
+
             return width > 0.001f && height > 0.001f;
+        }
+
+        static float MeasureBoundsExtent(Bounds bounds, Vector3 axis)
+        {
+            Vector3 extent = bounds.extents;
+            Vector3[] corners =
+            {
+                bounds.center + new Vector3( extent.x,  extent.y,  extent.z),
+                bounds.center + new Vector3( extent.x,  extent.y, -extent.z),
+                bounds.center + new Vector3( extent.x, -extent.y,  extent.z),
+                bounds.center + new Vector3( extent.x, -extent.y, -extent.z),
+                bounds.center + new Vector3(-extent.x,  extent.y,  extent.z),
+                bounds.center + new Vector3(-extent.x,  extent.y, -extent.z),
+                bounds.center + new Vector3(-extent.x, -extent.y,  extent.z),
+                bounds.center + new Vector3(-extent.x, -extent.y, -extent.z),
+            };
+
+            float min = float.MaxValue;
+            float max = float.MinValue;
+            for (int i = 0; i < corners.Length; i++)
+            {
+                float projection = Vector3.Dot(corners[i], axis);
+                min = Mathf.Min(min, projection);
+                max = Mathf.Max(max, projection);
+            }
+
+            return max - min;
         }
 
         static List<Renderer> CollectSpinRenderers(GameObject slotMachineRoot)

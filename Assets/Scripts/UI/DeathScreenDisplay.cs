@@ -10,6 +10,7 @@ namespace MonsterMiner.UI
 
         static GUIStyle headerStyle;
         static GUIStyle bodyStyle;
+        static GUIStyle footerStyle;
         static GUIStyle okButtonStyle;
 
         static Action onConfirm;
@@ -21,6 +22,15 @@ namespace MonsterMiner.UI
         {
             isActive = true;
             onConfirm = confirm;
+            UnlockCursor();
+        }
+
+        public static void EnsureCursorUnlocked()
+        {
+            if (!isActive)
+                return;
+
+            UnlockCursor();
         }
 
         public static void HandleInput()
@@ -28,7 +38,11 @@ namespace MonsterMiner.UI
             if (!isActive)
                 return;
 
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            if (Input.GetKeyDown(KeyCode.Return)
+                || Input.GetKeyDown(KeyCode.KeypadEnter)
+                || Input.GetKeyDown(KeyCode.E)
+                || Input.GetKeyDown(KeyCode.Escape)
+                || Input.GetKeyDown(KeyCode.Space))
                 Confirm();
         }
 
@@ -54,13 +68,15 @@ namespace MonsterMiner.UI
             GUI.Label(new Rect(panelRect.x, panelRect.y + 16f, panelRect.width, 36f), "You died", headerStyle);
             GUI.Label(
                 new Rect(panelRect.x + 20f, panelRect.y + 56f, panelRect.width - 40f, 48f),
-                "Your items were dropped where you fell.",
+                "Your items were dropped where you fell.\nYour money is safe.",
                 bodyStyle);
 
             var okRect = new Rect(panelRect.x + PanelWidth * 0.5f - 90f, panelRect.yMax - 56f, 180f, 38f);
             if (GUI.Button(okRect, "OK", okButtonStyle))
                 Confirm();
 
+            GUI.color = new Color(0.75f, 0.75f, 0.75f);
+            GUI.Label(new Rect(panelRect.x, panelRect.yMax - 22f, panelRect.width, 20f), "E, Enter, or Space to respawn", footerStyle);
             GUI.color = Color.white;
         }
 
@@ -73,6 +89,12 @@ namespace MonsterMiner.UI
             var callback = onConfirm;
             onConfirm = null;
             callback?.Invoke();
+        }
+
+        static void UnlockCursor()
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         static void DrawBorder(Rect rect, Color color)
@@ -111,6 +133,13 @@ namespace MonsterMiner.UI
             {
                 fontSize = 18,
                 fontStyle = FontStyle.Bold
+            };
+
+            footerStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 14,
+                normal = { textColor = new Color(0.75f, 0.75f, 0.75f) }
             };
         }
     }

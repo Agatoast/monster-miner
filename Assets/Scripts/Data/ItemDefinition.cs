@@ -30,5 +30,6 @@ namespace MonsterMiner.Data
         public int finderLocateMax = 1;
         public bool isSlotTestToken;
         public bool isBossDrop;
+        public bool isMagicCompass;
     }
 }

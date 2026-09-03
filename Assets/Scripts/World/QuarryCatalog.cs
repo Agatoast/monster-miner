@@ -18,6 +18,10 @@ namespace MonsterMiner.World
         public const float LandQuarry2ShopWestOfSpawnFeet = 20f;
         public const float LandQuarry2BeachApproachSpawnSouthOfSandFeet = 32f;
         public const float LandQuarry2BeachApproachSpawnWestOfBeachCenterFeet = 12f;
+        public const bool SpawnPlayerOnIslandForTesting = false;
+        public const bool SpawnPlayerAtJarlLandShopForTesting = true;
+        public const float IslandPlayerSpawnOffsetFromCenterFeet = 30f;
+        public const float JarlLandShopFrontSpawnFeet = 10f;
         public const string JarlLandDisplayName = "Jarl Land";
 
         public const int PlateauQuarryIndex = 1;
@@ -86,10 +90,18 @@ namespace MonsterMiner.World
 
         public static Vector2 GetLandQuarry2Center() => new Vector2(0f, WorldScale.Miles(1f));
 
+        public static Vector2 GetLandQuarry3Center()
+        {
+            var quarry2 = GetLandQuarry2Center();
+            return new Vector2(quarry2.x + WorldScale.Miles(1f), quarry2.y);
+        }
+
         public static Vector2 GetLandQuarryCenter(int quarryIndex)
         {
             if (quarryIndex == LandQuarry2Index)
                 return GetLandQuarry2Center();
+            if (quarryIndex == LandQuarry3Index)
+                return GetLandQuarry3Center();
 
             return Vector2.zero;
         }
@@ -106,10 +118,8 @@ namespace MonsterMiner.World
 
         public static Vector3 ResolveHallFrontSpawnWorld(CavernBounds bounds)
         {
-            if (PlayerSpawnPersistence.HasSavedLandSpawn)
-            {
+            if (!SpawnPlayerOnIslandForTesting && PlayerSpawnPersistence.HasSavedLandSpawn)
                 return PlayerSpawnPersistence.LoadSavedLandSpawn();
-            }
 
             return ResolvePlayerSpawnWorld(bounds);
         }
@@ -119,15 +129,71 @@ namespace MonsterMiner.World
             if (bounds == null)
                 return Vector3.zero;
 
-            if (PlayerSpawnPersistence.HasSavedLandSpawn)
+            if (!SpawnPlayerOnIslandForTesting && PlayerSpawnPersistence.HasSavedLandSpawn)
                 return PlayerSpawnPersistence.LoadSavedLandSpawn();
 
-            Vector3 contentLocal = ResolveBeachApproachSpawnContentLocal();
-            Vector3 worldPoint = bounds.transform.TransformPoint(contentLocal);
+            Vector3 worldPoint;
+            if (SpawnPlayerAtJarlLandShopForTesting)
+            {
+                var quarry = FindQuarry2Root(bounds);
+                worldPoint = quarry != null
+                    ? quarry.TransformPoint(ResolveJarlLandShopFrontSpawnLocal(quarry))
+                    : ResolvePlayerSpawnWorldFromContentLocal(bounds, ResolveBeachApproachSpawnContentLocal());
+            }
+            else
+            {
+                Vector3 contentLocal = SpawnPlayerOnIslandForTesting
+                    ? ResolveIslandPlayerSpawnContentLocal()
+                    : ResolveBeachApproachSpawnContentLocal();
+                worldPoint = ResolvePlayerSpawnWorldFromContentLocal(bounds, contentLocal);
+            }
+
             return PlainsGroundSupport.SnapWorldPointToPlains(
                 bounds,
                 worldPoint,
                 WorldScale.CharacterHeightUnits * 0.5f);
+        }
+
+        static Vector3 ResolvePlayerSpawnWorldFromContentLocal(CavernBounds bounds, Vector3 contentLocal)
+        {
+            Vector3 worldPoint = bounds.transform.TransformPoint(contentLocal);
+            if (SpawnPlayerOnIslandForTesting
+                && LakeIslandVisualFactory.TrySampleIslandMeshWorldY(
+                    contentLocal.x,
+                    contentLocal.z,
+                    bounds.transform,
+                    out float islandSurfaceY))
+            {
+                worldPoint.y = islandSurfaceY;
+            }
+
+            return worldPoint;
+        }
+
+        public static Vector3 ResolveJarlLandShopFrontSpawnLocal(Transform quarryRoot)
+        {
+            if (quarryRoot == null)
+                return Vector3.zero;
+
+            var hall = quarryRoot.Find(VikingBuildingVisualFactory.HallObjectName);
+            GameObject hallObject = hall != null ? hall.gameObject : null;
+            Vector3 shopAnchorLocal = ResolveQuarryShopAnchorLocal(hallObject, quarryRoot);
+            Vector3 defaultSpawnLocal = ResolvePlayerSpawnLocal(hallObject, quarryRoot);
+            Vector3 toCustomer = defaultSpawnLocal - shopAnchorLocal;
+            toCustomer.y = 0f;
+            if (toCustomer.sqrMagnitude < 0.001f)
+                toCustomer = Vector3.right;
+            else
+                toCustomer.Normalize();
+
+            return shopAnchorLocal + toCustomer * WorldScale.Feet(JarlLandShopFrontSpawnFeet);
+        }
+
+        public static Vector3 ResolveIslandPlayerSpawnContentLocal()
+        {
+            Vector2 center = LakeCatalog.GetLakeIslandCenterLocal();
+            float offset = WorldScale.Feet(IslandPlayerSpawnOffsetFromCenterFeet);
+            return new Vector3(center.x, 0f, center.y - offset);
         }
 
         public static Vector3 ResolveBeachApproachSpawnContentLocal()
@@ -238,13 +304,82 @@ namespace MonsterMiner.World
 
         public static Vector3 ResolveCenterWorld(CavernBounds bounds)
         {
+            return ResolveQuarryCenterWorld(bounds, LandQuarry2Index);
+        }
+
+        public static Vector3 ResolveQuarryCenterWorld(CavernBounds bounds, int quarryIndex)
+        {
             if (bounds == null)
                 return Vector3.zero;
 
-            var center = GetLandQuarry2Center();
+            var center = GetLandQuarryCenter(quarryIndex);
             float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
             float groundY = PlainsWorldBuilder.SamplePlainsLocalY(center.x, center.y, plainsBaseY);
             return bounds.transform.TransformPoint(new Vector3(center.x, groundY, center.y));
+        }
+
+        public static Vector3 ResolveQuarryShopRespawnWorld(CavernBounds bounds, int quarryIndex)
+        {
+            if (bounds == null)
+                return Vector3.zero;
+
+            switch (quarryIndex)
+            {
+                case LandQuarry2Index:
+                    return ResolveLandQuarry2ShopRespawnWorld(bounds);
+                default:
+                    return ResolvePlateauShopRespawnWorld(bounds);
+            }
+        }
+
+        public static Vector3 ResolveNearDroppedEquipmentSpawnWorld(CavernBounds bounds, Vector3 equipmentCenter)
+        {
+            if (bounds == null)
+                return equipmentCenter;
+
+            Vector2 offset = Random.insideUnitCircle;
+            if (offset.sqrMagnitude < 0.01f)
+                offset = Vector2.up;
+            offset.Normalize();
+
+            Vector3 spawn = equipmentCenter + new Vector3(offset.x, 0f, offset.y) * WorldScale.Feet(10f);
+            return PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                spawn,
+                WorldScale.CharacterHeightUnits * 0.5f);
+        }
+
+        static Vector3 ResolvePlateauShopRespawnWorld(CavernBounds bounds)
+        {
+            float shopAnchorZ = WorldScale.Feet(WorldScale.ShopDistanceFromSpawnFeet);
+            const float counterLocalZ = -1.1f;
+            float spawnZ = shopAnchorZ + counterLocalZ - WorldScale.Feet(5f);
+
+            Vector3 worldPoint;
+            if (bounds.TryResolveFloorWorldPoint(0f, spawnZ, out Vector3 floorPoint))
+                worldPoint = floorPoint;
+            else
+                worldPoint = bounds.transform.TransformPoint(new Vector3(0f, bounds.SampleFloorWorldY(0f, spawnZ), spawnZ));
+
+            return PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                worldPoint,
+                WorldScale.CharacterHeightUnits * 0.5f);
+        }
+
+        static Vector3 ResolveLandQuarry2ShopRespawnWorld(CavernBounds bounds)
+        {
+            var quarry = FindQuarry2Root(bounds);
+            if (quarry == null)
+                return ResolvePlateauShopRespawnWorld(bounds);
+
+            var hall = FindQuarry2Hall(bounds);
+            Vector3 spawnLocal = ResolvePlayerSpawnLocal(hall != null ? hall.gameObject : null, quarry);
+            Vector3 worldPoint = quarry.TransformPoint(spawnLocal);
+            return PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                worldPoint,
+                WorldScale.CharacterHeightUnits * 0.5f);
         }
 
         static Vector2 GetTruckLocal(GameContext ctx)

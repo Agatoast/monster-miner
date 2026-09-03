@@ -395,13 +395,7 @@ namespace MonsterMiner.UI
             GUI.color = Color.white;
         }
 
-        static string FormatFinderName(string displayName)
-        {
-            if (string.IsNullOrEmpty(displayName))
-                return displayName;
-
-            return displayName.Replace(' ', '\n');
-        }
+        static string FormatFinderName(string displayName) => ItemDisplayNameUtility.FormatFinderName(displayName);
 
         static void DrawBorder(Rect rect, Color color, float thickness)
         {

@@ -86,15 +86,12 @@ namespace MonsterMiner.Util
             if (collider == null)
                 return false;
 
-            if (collider.GetComponent<Terrain>() != null)
+            var transform = collider.transform;
+            while (transform != null)
             {
-                var transform = collider.transform;
-                while (transform != null)
-                {
-                    if (transform.name == "LakeIslandTerrain")
-                        return true;
-                    transform = transform.parent;
-                }
+                if (transform.name == "LakeIslandTerrain")
+                    return true;
+                transform = transform.parent;
             }
 
             return false;
@@ -128,7 +125,8 @@ namespace MonsterMiner.Util
                 return true;
 
             bool onIsland = hasLocal
-                && LakeIslandVisualFactory.IsOverDryLand(localX, localZ, bounds.transform);
+                && LakeCatalog.IsWalkableLandLocal(localX, localZ, bounds.transform)
+                && LakeCatalog.IsLakeIslandLocal(localX, localZ);
 
             bool onBeach = hasLocal && LakeCatalog.IsBeachLocal(localX, localZ);
             bool onLakeApproach = hasLocal && LandQuarry2Boundary.IsLakeApproachLandLocal(localX, localZ);
@@ -169,7 +167,8 @@ namespace MonsterMiner.Util
             }
 
             bool onIsland = hasLocal
-                && LakeIslandVisualFactory.IsOverDryLand(localX, localZ, bounds.transform);
+                && LakeCatalog.IsWalkableLandLocal(localX, localZ, bounds.transform)
+                && LakeCatalog.IsLakeIslandLocal(localX, localZ);
 
             for (int i = 0; i < hits.Length; i++)
             {

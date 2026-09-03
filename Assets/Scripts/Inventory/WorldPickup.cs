@@ -23,19 +23,14 @@ namespace MonsterMiner.Inventory
                 go = PebbleVisualFactory.CreateWorldPebble(position, item.displayName);
                 AttachStaticRigidbody(go);
             }
-            else if (InventorySystem.IsMonsterMeat(item))
+            else if (item.itemId == "jormungandr_skull")
             {
-                go = MeatVisualFactory.CreateWorldMeat(position, item);
-                AttachStaticRigidbody(go);
+                go = SkullVisualFactory.CreateWorldDrop(position, item.displayName);
+                AttachStaticRigidbody(go, 0.3f);
             }
             else
             {
-                go = PrimitiveFactory.CreatePrimitive(
-                    PrimitiveType.Sphere,
-                    position,
-                    Vector3.one * 0.35f * MeatVisualFactory.DropVisualScaleMultiplier,
-                    item.worldColor,
-                    item.displayName);
+                go = MeatVisualFactory.CreateWorldItemDrop(position, item);
                 AttachStaticRigidbody(go, 0.3f);
             }
             var pickup = go.AddComponent<WorldPickup>();

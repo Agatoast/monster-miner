@@ -10,10 +10,10 @@ namespace MonsterMiner.Combat
             weaponId = Inventory.InventorySystem.ResolveBaseWeaponId(weaponId);
             config = weaponId switch
             {
-                "pistol" => new RangedWeaponConfig(25f, 9, false, 1, 1f),
-                "rifle" => new RangedWeaponConfig(200f, 5, false, 1, 2f),
-                "shotgun" => new RangedWeaponConfig(30f, 5, true, 1, 3f),
-                "machinegun" => new RangedWeaponConfig(40f, 30, false, 3, 3f),
+                "pistol" => new RangedWeaponConfig(15f, 9, false, 1, 1f),
+                "rifle" => new RangedWeaponConfig(25f, 5, false, 1, 2f),
+                "shotgun" => new RangedWeaponConfig(20f, 5, true, 1, 3f),
+                "machinegun" => new RangedWeaponConfig(15f, 30, false, 3, 3f),
                 _ => default
             };
 

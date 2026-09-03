@@ -1,4 +1,5 @@
 using MonsterMiner.Core;
+using MonsterMiner.Economy;
 using MonsterMiner.Interaction;
 using UnityEngine;
 
@@ -18,6 +19,9 @@ namespace MonsterMiner.Player
             if (boat == null)
                 return string.Empty;
 
+            if (!WarrensonBoatNpc.IsBoatUsable(GameContext.Instance))
+                return "Rent Warrenson's boat first";
+
             var mount = GameContext.Instance?.Player?.GetComponent<PlayerVehicleMount>();
             if (mount != null && mount.IsDrivingBoat && mount.CurrentBoat == boat)
             {
@@ -33,6 +37,9 @@ namespace MonsterMiner.Player
         public bool CanInteract(GameObject interactor)
         {
             if (boat == null || interactor == null)
+                return false;
+
+            if (!WarrensonBoatNpc.IsBoatUsable(GameContext.Instance))
                 return false;
 
             var mount = interactor.GetComponent<PlayerVehicleMount>();

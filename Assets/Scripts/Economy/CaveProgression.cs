@@ -23,6 +23,9 @@ namespace MonsterMiner.Economy
         public bool HasLandQuarry3 { get; private set; }
         public bool HasLandQuarry4 { get; private set; }
         public bool HasLandQuarry5 { get; private set; }
+        public bool JarlSkullQuestComplete { get; private set; }
+        public bool Quarry3CompassReturned { get; private set; }
+        public bool HasBoatRental { get; private set; }
         public bool CanEquipMinerWings =>
             HasMinerWingsPermission && !MinerWingsConsumed;
 
@@ -66,6 +69,36 @@ namespace MonsterMiner.Economy
             HasLandQuarry2 = true;
             var builder = FindFirstObjectByType<CavernBuilder>();
             builder?.BuildLandQuarry2(GameContext.Instance?.CavernBounds);
+            GameContext.Instance?.SpawnManager?.EnsureJarlLandEggsSpawned();
+        }
+
+        public void CompleteJarlSkullQuest()
+        {
+            if (JarlSkullQuestComplete)
+                return;
+
+            JarlSkullQuestComplete = true;
+            UnlockLandQuarry3();
+        }
+
+        public void UnlockLandQuarry3()
+        {
+            if (HasLandQuarry3)
+                return;
+
+            HasLandQuarry3 = true;
+            var builder = FindFirstObjectByType<CavernBuilder>();
+            builder?.BuildLandQuarry3(GameContext.Instance?.CavernBounds);
+        }
+
+        public void CompleteQuarry3CompassReturn()
+        {
+            Quarry3CompassReturned = true;
+        }
+
+        public void CompleteBoatRental()
+        {
+            HasBoatRental = true;
         }
 
         public void BeginBlastSequence()

@@ -13,8 +13,12 @@ namespace MonsterMiner.World
         public const float BoatPlayerSpawnShoreInsetFeet = 18f;
         public const float BoatDismountShoreProximityFeet = 10f;
         public const float BoatDismountInlandFeet = 30f;
-        public const float WaterSurfaceLocalYOffsetFeet = 0.2f;
+        public const float WaterSurfaceLocalYOffsetFeet = -1.5f;
         public static float WaterSurfaceLocalYOffset => WorldScale.Feet(WaterSurfaceLocalYOffsetFeet);
+
+        public const float IslandDiameterFeet = 600f;
+        public static float GetIslandNominalDiameterLocal() => WorldScale.Feet(IslandDiameterFeet);
+        public static float GetIslandNominalRadiusLocal() => GetIslandNominalDiameterLocal() * 0.5f;
 
         public const float JarlLakeConnectionAngle = Mathf.PI * 0.5f;
         const float LakeSouthShoreAngle = -Mathf.PI * 0.5f;
@@ -32,6 +36,12 @@ namespace MonsterMiner.World
             var jarlNorth = GetJarlNorthShoreContentLocal();
             float centerZ = GetBeachSouthEdgeZ() + WorldScale.Feet(BeachGapFeet * 0.5f);
             return new Vector2(jarlNorth.x, centerZ);
+        }
+
+        public static Vector2 GetWarrensonSpawnContentLocal()
+        {
+            var beachCenter = GetBeachCenterContentLocal();
+            return new Vector2(beachCenter.x, beachCenter.y - WorldScale.Feet(22f));
         }
 
         public static float GetBeachShoreAngle(float contentX)
@@ -250,33 +260,11 @@ namespace MonsterMiner.World
                 && LakeIslandVisualFactory.BlocksBoatAtContentLocal(localX, localZ, bounds.transform))
                 return false;
 
-            if (HasLakeIsland && IsLakeIslandLocal(localX, localZ))
-                return true;
-
-            if (IsBoatLaunchCorridorLocal(localX, localZ))
-                return true;
-
             if (IsOpenWaterLocal(localX, localZ))
                 return true;
 
-            if (LakeBoundary.IsBeachLocal(localX, localZ))
-                return true;
-
-            return LandQuarry2Boundary.IsLakeApproachLandLocal(localX, localZ);
-        }
-
-        static bool IsBoatLaunchCorridorLocal(float localX, float localZ)
-        {
-            if (!IsWithinBeachLaunchCorridorX(localX))
-                return false;
-
-            if (localZ < GetBeachSouthEdgeZ() - WorldScale.Feet(5f))
-                return false;
-
-            if (LakeBoundary.ContainsLocal(localX, localZ))
-                return true;
-
-            return localZ <= GetBeachNorthEdgeZ() + WorldScale.Feet(30f);
+            // Mooring beach only — not the snow lake-approach corridor.
+            return IsBeachLocal(localX, localZ);
         }
 
         public static Vector2 GetNearestShoreLocal(float localX, float localZ)
@@ -301,7 +289,7 @@ namespace MonsterMiner.World
                 return LakeIslandVisualFactory.IsIslandBoatDismountLandLocal(localX, localZ, boundsTransform);
 
             if (boundsTransform != null
-                && LakeIslandVisualFactory.IsOverDryLand(localX, localZ, boundsTransform))
+                && LakeIslandVisualFactory.IsIslandWalkableLandLocal(localX, localZ, boundsTransform))
                 return true;
 
             return false;
@@ -319,7 +307,7 @@ namespace MonsterMiner.World
             Vector2 center = GetLakeIslandCenterLocal();
             float radius = GetLakeIslandRadiusLocal();
             float distToCenter = Vector2.Distance(new Vector2(localX, localZ), center);
-            float threshold = WorldScale.Feet(proximityFeet + 12f);
+            float threshold = WorldScale.Feet(proximityFeet + 18f);
 
             if (distToCenter > radius + threshold)
                 return false;
@@ -370,7 +358,7 @@ namespace MonsterMiner.World
                 float dx = nearestLand.x - localX;
                 float dz = nearestLand.y - localZ;
                 float landThreshold = HasLakeIsland
-                    ? WorldScale.Feet(BoatDismountShoreProximityFeet + 12f)
+                    ? WorldScale.Feet(BoatDismountShoreProximityFeet + 18f)
                     : threshold;
                 return dx * dx + dz * dz <= landThreshold * landThreshold;
             }
@@ -396,6 +384,22 @@ namespace MonsterMiner.World
                     bounds.transform,
                     BoatDismountShoreProximityFeet))
             {
+                return false;
+            }
+
+            if (HasLakeIsland
+                && IsNearLakeIslandShoreLocal(
+                    boatLocal.x,
+                    boatLocal.z,
+                    bounds.transform,
+                    BoatDismountShoreProximityFeet))
+            {
+                if (TryResolveIslandBoatDismountLocal(bounds, boatLocal, out Vector3 islandDismountLocal))
+                {
+                    dismountWorldPosition = bounds.transform.TransformPoint(islandDismountLocal);
+                    return true;
+                }
+
                 return false;
             }
 
@@ -438,6 +442,30 @@ namespace MonsterMiner.World
             dismountWorldPosition = Vector3.zero;
             if (bounds == null || referenceWorldPoints == null || referenceCount <= 0)
                 return false;
+
+            if (HasLakeIsland)
+            {
+                Vector3 sum = Vector3.zero;
+                for (int i = 0; i < referenceCount; i++)
+                    sum += referenceWorldPoints[i];
+
+                Vector3 boatWorld = sum / referenceCount;
+                Vector3 boatLocal = bounds.transform.InverseTransformPoint(boatWorld);
+                if (IsNearLakeIslandShoreLocal(
+                        boatLocal.x,
+                        boatLocal.z,
+                        bounds.transform,
+                        BoatDismountShoreProximityFeet)
+                    && TryResolveIslandBoatStopSailingWorldPosition(bounds, boatWorld, out dismountWorldPosition))
+                    return true;
+
+                if (IsNearLakeIslandShoreLocal(
+                        boatLocal.x,
+                        boatLocal.z,
+                        bounds.transform,
+                        BoatDismountShoreProximityFeet))
+                    return false;
+            }
 
             for (int i = 0; i < referenceCount; i++)
             {
@@ -800,35 +828,21 @@ namespace MonsterMiner.World
                     BoatDismountShoreProximityFeet))
                 return false;
 
-            Vector2 center = GetLakeIslandCenterLocal();
-            Vector2 boatXZ = new Vector2(boatContentLocal.x, boatContentLocal.z);
-            Vector2 toCenter = center - boatXZ;
-            if (toCenter.sqrMagnitude < 0.0001f)
-                toCenter = Vector2.up;
-            toCenter.Normalize();
-
-            Vector2 shoreLocal = boatXZ;
-            bool foundShore = false;
-            float maxMarch = GetLakeIslandRadiusLocal() + WorldScale.Feet(BoatDismountShoreProximityFeet + 4f);
-            for (float distance = WorldScale.Feet(1f); distance <= maxMarch; distance += WorldScale.Feet(1f))
-            {
-                float sampleX = boatContentLocal.x + toCenter.x * distance;
-                float sampleZ = boatContentLocal.z + toCenter.y * distance;
-                if (!IsWalkableLandLocal(sampleX, sampleZ, boundsTransform))
-                    continue;
-
-                shoreLocal = new Vector2(sampleX, sampleZ);
-                foundShore = true;
-                break;
-            }
-
-            if (!foundShore)
+            if (!LakeIslandVisualFactory.TryFindIslandBoatDismountContentLocal(
+                    boatContentLocal.x,
+                    boatContentLocal.z,
+                    boundsTransform,
+                    out Vector3 shoreContentLocal)
+                && !TryGetFallbackIslandDismountContentLocal(boatContentLocal, boundsTransform, out shoreContentLocal))
                 return false;
 
-            Vector2 inlandDirection = SampleShoreInlandDirectionLocal(
-                shoreLocal.x,
-                shoreLocal.y,
-                boundsTransform);
+            Vector2 center = GetLakeIslandCenterLocal();
+            Vector2 shoreLocal = new Vector2(shoreContentLocal.x, shoreContentLocal.z);
+            Vector2 inlandDirection = center - shoreLocal;
+            if (inlandDirection.sqrMagnitude < 0.0001f)
+                inlandDirection = Vector2.up;
+            inlandDirection.Normalize();
+
             float inlandMax = WorldScale.Feet(BoatDismountInlandFeet);
             float distToCenter = Vector2.Distance(shoreLocal, center);
             inlandMax = Mathf.Min(inlandMax, distToCenter * 0.65f);
@@ -840,14 +854,48 @@ namespace MonsterMiner.World
                     shoreLocal.x + inlandDirection.x * step,
                     0f,
                     shoreLocal.y + inlandDirection.y * step);
-                if (IsWalkableLandLocal(candidate.x, candidate.z, boundsTransform))
+                if (LakeIslandVisualFactory.IsIslandBoatDismountLandLocal(
+                        candidate.x,
+                        candidate.z,
+                        boundsTransform))
                 {
                     dismountContentLocal = candidate;
                     return true;
                 }
             }
 
-            dismountContentLocal = new Vector3(shoreLocal.x, 0f, shoreLocal.y);
+            dismountContentLocal = shoreContentLocal;
+            return true;
+        }
+
+        static bool TryGetFallbackIslandDismountContentLocal(
+            Vector3 boatContentLocal,
+            Transform boundsTransform,
+            out Vector3 dismountContentLocal)
+        {
+            dismountContentLocal = boatContentLocal;
+            if (boundsTransform == null)
+                return false;
+
+            Vector2 center = GetLakeIslandCenterLocal();
+            float radius = GetLakeIslandRadiusLocal() * 0.82f;
+            Vector2 boatXZ = new Vector2(boatContentLocal.x, boatContentLocal.z);
+            Vector2 fromCenter = boatXZ - center;
+            if (fromCenter.sqrMagnitude < 0.0001f)
+                fromCenter = Vector2.up;
+            fromCenter.Normalize();
+
+            Vector3 candidate = new Vector3(
+                center.x + fromCenter.x * radius,
+                0f,
+                center.y + fromCenter.y * radius);
+            if (!LakeIslandVisualFactory.IsIslandWalkableLandLocal(
+                    candidate.x,
+                    candidate.z,
+                    boundsTransform))
+                return false;
+
+            dismountContentLocal = candidate;
             return true;
         }
 
@@ -946,7 +994,7 @@ namespace MonsterMiner.World
         static Vector2 SampleShoreInlandDirectionLocal(float localX, float localZ, Transform boundsTransform)
         {
             if (boundsTransform != null
-                && LakeIslandVisualFactory.IsOverDryLand(localX, localZ, boundsTransform))
+                && LakeIslandVisualFactory.IsIslandWalkableLandLocal(localX, localZ, boundsTransform))
             {
                 Vector2 center = GetLakeIslandCenterLocal();
                 Vector2 toCenter = center - new Vector2(localX, localZ);
@@ -978,7 +1026,7 @@ namespace MonsterMiner.World
 
         static float SampleDistanceToIslandDryLandLocal(float localX, float localZ, Transform boundsTransform)
         {
-            if (LakeIslandVisualFactory.IsOverDryLand(localX, localZ, boundsTransform))
+            if (LakeIslandVisualFactory.IsIslandBoatDismountLandLocal(localX, localZ, boundsTransform))
                 return 0f;
 
             if (!HasLakeIsland)
@@ -996,7 +1044,7 @@ namespace MonsterMiner.World
                 {
                     float sampleX = localX + toCenter.x * distance;
                     float sampleZ = localZ + toCenter.y * distance;
-                    if (LakeIslandVisualFactory.IsOverDryLand(sampleX, sampleZ, boundsTransform))
+                    if (LakeIslandVisualFactory.IsIslandBoatDismountLandLocal(sampleX, sampleZ, boundsTransform))
                         return distance;
                 }
             }
@@ -1009,7 +1057,7 @@ namespace MonsterMiner.World
                 {
                     float sampleX = localX + direction.x * distance;
                     float sampleZ = localZ + direction.y * distance;
-                    if (LakeIslandVisualFactory.IsOverDryLand(sampleX, sampleZ, boundsTransform))
+                    if (LakeIslandVisualFactory.IsIslandBoatDismountLandLocal(sampleX, sampleZ, boundsTransform))
                         return distance;
                 }
             }

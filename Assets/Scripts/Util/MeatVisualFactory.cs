@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using MonsterMiner.Data;
+using MonsterMiner.Inventory;
+using MonsterMiner.World;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -12,6 +14,7 @@ namespace MonsterMiner.Util
         const float ExtrusionDepthRatio = 0.34f;
         public const float DropVisualScaleMultiplier = 2f;
         const float AlphaThreshold = 0.08f;
+        const float WorldDropRestOffsetFeet = 0.15f;
         static readonly Color PlaceholderColor = new Color(0.85f, 0.2f, 0.2f);
 
         static readonly Dictionary<string, OpaqueBounds> opaqueBoundsCache = new();
@@ -48,24 +51,52 @@ namespace MonsterMiner.Util
             public static OpaqueBounds Full => new OpaqueBounds(0f, 0f, 1f, 1f);
         }
 
-        public static GameObject CreateWorldMeat(Vector3 worldPoint, ItemDefinition item)
+        public static GameObject CreateWorldMeat(Vector3 worldPoint, ItemDefinition item) =>
+            CreateWorldItemDrop(worldPoint, item);
+
+        public static GameObject CreateWorldItemDrop(Vector3 worldPoint, ItemDefinition item)
         {
-            string name = item != null ? item.displayName : "Meat";
+            if (item == null)
+                return null;
 
             if (!FloorAnchor.TryResolveFloorPoint(worldPoint, 16f, 32f, out var floorPoint))
                 floorPoint = worldPoint;
 
-            int seed = Mathf.Abs((floorPoint * 1000f).GetHashCode());
+            int seed = Mathf.Abs((floorPoint * 1000f).GetHashCode() ^ (item.itemId?.GetHashCode() ?? 0));
+
+            if (InventorySystem.IsMonsterMeat(item))
+            {
+                var imported = TryCreateImportedMeat(
+                    item.displayName,
+                    floorPoint,
+                    Quaternion.identity,
+                    item,
+                    seed,
+                    world: true,
+                    includeCollider: true);
+                if (imported != null)
+                {
+                    FloorAnchor.PlaceOnFloor(imported, floorPoint);
+                    return imported;
+                }
+            }
+
+            var state = Random.state;
+            Random.InitState(seed);
+            var rotation = Quaternion.Euler(90f, Random.Range(0f, 360f), 0f);
+            Random.state = state;
+
             var go = CreateMeatSlab(
-                name,
+                item.displayName,
                 floorPoint,
-                Quaternion.identity,
+                rotation,
                 item,
                 seed,
                 world: true,
                 includeCollider: true);
 
-            FloorAnchor.PlaceOnFloor(go, floorPoint);
+            float floorY = FloorAnchor.ResolveFloorSurfaceY(floorPoint);
+            FloorAnchor.SnapBottomToFloor(go, floorY, WorldScale.Feet(WorldDropRestOffsetFeet));
             return go;
         }
 
@@ -106,30 +137,33 @@ namespace MonsterMiner.Util
                 return imported;
 
             float baseLinear = GetBaseLinearScale(seed, world);
-            string texturePath = ResolveMeatTexturePath(item);
-            OpaqueBounds bounds = GetOpaqueBounds(texturePath);
-
-            var go = new GameObject(name);
-            go.transform.SetPositionAndRotation(position, rotation);
-            go.transform.localScale = new Vector3(
-                baseLinear * bounds.Width,
-                baseLinear * bounds.Width,
-                baseLinear * bounds.MaxExtent * ExtrusionDepthRatio);
-
-            var meshFilter = go.AddComponent<MeshFilter>();
-            meshFilter.sharedMesh = GetSlabMesh(bounds.Aspect);
-
-            var renderer = go.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = CreateMeatMaterial(texturePath, bounds);
-
-            if (includeCollider)
+            if (TryLoadDropIconTexture(item, out var texture, out string boundsKey, out OpaqueBounds bounds))
             {
-                var collider = go.AddComponent<BoxCollider>();
-                collider.size = Vector3.one;
-                collider.center = Vector3.zero;
+                var go = new GameObject(name);
+                go.transform.SetPositionAndRotation(position, rotation);
+                go.transform.localScale = new Vector3(
+                    baseLinear * bounds.Width,
+                    baseLinear * bounds.Width,
+                    baseLinear * bounds.MaxExtent * ExtrusionDepthRatio);
+
+                var meshFilter = go.AddComponent<MeshFilter>();
+                meshFilter.sharedMesh = GetSlabMesh(bounds.Aspect);
+
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = CreateDropMaterial(texture, bounds, item);
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+
+                if (includeCollider)
+                {
+                    var collider = go.AddComponent<BoxCollider>();
+                    collider.size = Vector3.one;
+                    collider.center = Vector3.zero;
+                }
+
+                return go;
             }
 
-            return go;
+            return CreateSolidWorldSlab(name, position, rotation, item, baseLinear, includeCollider);
         }
 
         static Mesh GetSlabMesh(float aspect)
@@ -187,14 +221,91 @@ namespace MonsterMiner.Util
             return mesh;
         }
 
-        static float GetBaseLinearScale(int seed, bool world)
+        static GameObject CreateSolidWorldSlab(
+            string name,
+            Vector3 position,
+            Quaternion rotation,
+            ItemDefinition item,
+            float baseLinear,
+            bool includeCollider)
         {
-            Vector3 pebbleScale = PebbleVisualFactory.GetPebbleScale(seed);
-            float linear = (pebbleScale.x + pebbleScale.y + pebbleScale.z) / 3f;
-            if (world)
-                linear *= PebbleWorldScaleMultiplier;
+            var go = new GameObject(name);
+            go.transform.SetPositionAndRotation(position, rotation);
+            go.transform.localScale = Vector3.one * baseLinear;
 
-            return linear * (world ? 1f : HeldDropScaleMultiplier) * DropVisualScaleMultiplier;
+            var meshFilter = go.AddComponent<MeshFilter>();
+            meshFilter.sharedMesh = GetSlabMesh(1f);
+
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = CreateSolidDropMaterial(item);
+
+            if (includeCollider)
+            {
+                var collider = go.AddComponent<BoxCollider>();
+                collider.size = Vector3.one;
+                collider.center = Vector3.zero;
+            }
+
+            return go;
+        }
+
+        static bool TryLoadDropIconTexture(
+            ItemDefinition item,
+            out Texture2D texture,
+            out string boundsKey,
+            out OpaqueBounds bounds)
+        {
+            texture = null;
+            boundsKey = null;
+            bounds = OpaqueBounds.Full;
+
+            if (item == null)
+                return false;
+
+            texture = ItemIconUtility.GetIcon(item);
+            if (texture != null)
+            {
+                boundsKey = !string.IsNullOrEmpty(item.iconResourcePath) ? item.iconResourcePath : item.itemId;
+                bounds = GetOpaqueBoundsForTexture(boundsKey, texture);
+                return true;
+            }
+
+            if (item.isMiningGlove)
+            {
+                boundsKey = "Textures/Inventory/Glove";
+                texture = ItemIconUtility.LoadIconWithTransparentBackground(
+                    boundsKey,
+                    ItemIconUtility.IconBackgroundKeyMode.Black);
+                if (texture != null)
+                {
+                    bounds = GetOpaqueBoundsForTexture(boundsKey, texture);
+                    return true;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(item.iconResourcePath))
+            {
+                boundsKey = item.iconResourcePath;
+                texture = Resources.Load<Texture2D>(boundsKey);
+                if (texture != null)
+                {
+                    bounds = GetOpaqueBounds(boundsKey);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static OpaqueBounds GetOpaqueBoundsForTexture(string cacheKey, Texture2D texture)
+        {
+            if (!string.IsNullOrEmpty(cacheKey) && opaqueBoundsCache.TryGetValue(cacheKey, out var cached))
+                return cached;
+
+            var bounds = texture != null ? MeasureOpaqueBounds(texture) : OpaqueBounds.Full;
+            if (!string.IsNullOrEmpty(cacheKey))
+                opaqueBoundsCache[cacheKey] = bounds;
+            return bounds;
         }
 
         static string ResolveMeatTexturePath(ItemDefinition item)
@@ -203,6 +314,16 @@ namespace MonsterMiner.Util
                 return item.iconResourcePath;
 
             return "Textures/Creatures/Meat/rabbit";
+        }
+
+        static float GetBaseLinearScale(int seed, bool world)
+        {
+            Vector3 pebbleScale = PebbleVisualFactory.GetPebbleScale(seed);
+            float linear = (pebbleScale.x + pebbleScale.y + pebbleScale.z) / 3f;
+            if (world)
+                linear *= PebbleWorldScaleMultiplier;
+
+            return linear * (world ? 1f : HeldDropScaleMultiplier) * DropVisualScaleMultiplier;
         }
 
         static string ResolveMeatMeshPath(ItemDefinition item)
@@ -462,9 +583,31 @@ namespace MonsterMiner.Util
             return readable;
         }
 
+        static Material CreateDropMaterial(Texture2D texture, OpaqueBounds bounds, ItemDefinition item)
+        {
+            var mat = CreateMeatMaterial(texture, bounds, opaqueWorldDrop: true);
+            if (item != null && item.isMiningGlove && mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", item.worldColor);
+            else if (item != null && item.isMiningGlove && mat.HasProperty("_Color"))
+                mat.color = item.worldColor;
+
+            return mat;
+        }
+
+        static Material CreateSolidDropMaterial(ItemDefinition item)
+        {
+            Color color = item != null ? item.worldColor : PlaceholderColor;
+            return PrimitiveFactory.CreateColorMaterial(color, 0.35f);
+        }
+
         static Material CreateMeatMaterial(string resourcePath, OpaqueBounds bounds)
         {
             var texture = Resources.Load<Texture2D>(resourcePath);
+            return CreateMeatMaterial(texture, bounds, opaqueWorldDrop: false);
+        }
+
+        static Material CreateMeatMaterial(Texture2D texture, OpaqueBounds bounds, bool opaqueWorldDrop = false)
+        {
             var mat = PrimitiveFactory.CreateColorMaterial(texture != null ? Color.white : PlaceholderColor, 0.35f);
             if (texture == null)
                 return mat;
@@ -482,8 +625,31 @@ namespace MonsterMiner.Util
                 mat.SetTextureOffset("_MainTex", new Vector2(bounds.MinU, bounds.MinV));
             }
 
-            ConfigureTransparentIconMaterial(mat);
+            if (opaqueWorldDrop)
+                ConfigureOpaqueIconMaterial(mat);
+            else
+                ConfigureTransparentIconMaterial(mat);
             return mat;
+        }
+
+        static void ConfigureOpaqueIconMaterial(Material mat)
+        {
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", Color.white);
+
+            if (mat.HasProperty("_Surface"))
+                mat.SetFloat("_Surface", 0f);
+
+            if (mat.HasProperty("_AlphaClip"))
+            {
+                mat.SetFloat("_AlphaClip", 1f);
+                mat.SetFloat("_Cutoff", AlphaThreshold);
+                mat.EnableKeyword("_ALPHATEST_ON");
+            }
+
+            mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = (int)RenderQueue.AlphaTest;
         }
 
         static void ConfigureTransparentIconMaterial(Material mat)

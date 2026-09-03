@@ -23,6 +23,8 @@ namespace MonsterMiner.Data
         public bool isQuestBoss;
         public bool fleesFromPlayer;
         public bool fleesOverPlateauEdge;
+        public bool alwaysChasePlayer;
+        public bool chaseWhenPlayerOnIsland;
         public string visualPrefabResourcePath;
     }
 }

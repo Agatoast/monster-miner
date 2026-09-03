@@ -193,6 +193,14 @@ namespace MonsterMiner.World
             LandQuarry2Builder.Build(contentRoot, bounds);
         }
 
+        public void BuildLandQuarry3(CavernBounds bounds)
+        {
+            if (contentRoot == null || bounds == null)
+                return;
+
+            LandQuarry3Builder.Build(contentRoot, bounds);
+        }
+
         public void OpenCave2Passage()
         {
             if (contentRoot == null)

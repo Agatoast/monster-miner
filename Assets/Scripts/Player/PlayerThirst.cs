@@ -6,9 +6,9 @@ namespace MonsterMiner.Player
     public class PlayerThirst : MonoBehaviour
     {
         const float DefaultMaxThirst = 100f;
-        const float PercentLostPerMinute = 1f;
-        const float SecondsPerPercentLost = 60f;
-        const float DefaultDrainPerSecond = DefaultMaxThirst * (PercentLostPerMinute / 100f) / SecondsPerPercentLost;
+        const float PercentLostPerDrain = 1f;
+        const float SecondsPerPercentLost = 10f;
+        const float DefaultDrainPerSecond = DefaultMaxThirst * (PercentLostPerDrain / 100f) / SecondsPerPercentLost;
         public const float HealthRegenThreshold = 0.5f;
 
         public float MaxThirst { get; private set; } = DefaultMaxThirst;

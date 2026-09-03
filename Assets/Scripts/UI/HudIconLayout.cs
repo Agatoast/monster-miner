@@ -14,5 +14,10 @@ namespace MonsterMiner.UI
         public static float ThirstY => HeartY;
         public static float CompassX => ThirstX + IconSize + IconSpacing;
         public static float CompassY => HeartY;
+
+        public static float MagicCompassCenterX => ThirstX + IconSize * 0.5f;
+
+        public static float MagicCompassCenterY(float arrowInnerRadius) =>
+            ThirstY + IconSize + IconSpacing + arrowInnerRadius;
     }
 }

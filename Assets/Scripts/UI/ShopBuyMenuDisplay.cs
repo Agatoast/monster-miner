@@ -79,9 +79,13 @@ namespace MonsterMiner.UI
             if (shop == null || !shop.IsMenuOpen)
                 return;
 
-            if (Input.GetKeyDown(KeyCode.Escape)
-                || Input.GetKeyDown(KeyCode.E)
-                || Input.GetMouseButtonDown(1))
+            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+            {
+                shop.CloseMenu();
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.E) && !shop.ShouldIgnoreCloseE())
             {
                 shop.CloseMenu();
                 return;

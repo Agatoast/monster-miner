@@ -212,6 +212,7 @@ namespace MonsterMiner.Inventory
                         continue;
 
                     slot.count++;
+                    slot.fromShopPurchase = true;
                     if (slot.shopPurchasePrice <= 0)
                         slot.shopPurchasePrice = shopPurchasePrice;
                     OnInventoryChanged?.Invoke();
@@ -241,8 +242,12 @@ namespace MonsterMiner.Inventory
             if (slot == null || slot.IsEmpty)
                 return 0;
 
-            if (slot.fromShopPurchase && slot.shopPurchasePrice > 0)
-                return slot.shopPurchasePrice / 2;
+            int purchasePrice = slot.shopPurchasePrice;
+            if (purchasePrice <= 0)
+                purchasePrice = Core.GameContext.Instance?.Database?.GetShopListingCost(slot.item) ?? 0;
+
+            if (purchasePrice > 0 && (slot.fromShopPurchase || purchasePrice > slot.item.sellValue))
+                return purchasePrice / 2;
 
             return slot.item.sellValue;
         }
@@ -589,6 +594,16 @@ namespace MonsterMiner.Inventory
             item != null && ResolveBaseWeaponId(item) == "rifle";
 
         public static bool IsPentachickHeart(ItemDefinition item) => item != null && item.itemId == "pentachick_heart";
+
+        public static bool IsJormungandrSkull(ItemDefinition item) => item != null && item.itemId == "jormungandr_skull";
+
+        public static bool IsMagicCompass(ItemDefinition item) => item != null && item.isMagicCompass;
+
+        public bool HasMagicCompass()
+        {
+            var compass = Core.GameContext.Instance?.Database?.magicCompassItem;
+            return compass != null && ContainsItem(compass);
+        }
 
         public static bool IsBossDrop(ItemDefinition item) => item != null && item.isBossDrop;
 

@@ -49,7 +49,9 @@ namespace MonsterMiner.World
             float minX = lakeCenter.x - lakeRadius;
             float maxX = lakeCenter.x + lakeRadius;
             float minZ = jarlCenterContent.y - LandQuarry2Boundary.MaxEdgeDistance;
-            float maxZ = lakeCenter.y;
+            float maxZ = Mathf.Max(
+                lakeCenter.y,
+                LakeCatalog.GetBeachNorthEdgeZ() + WorldScale.Feet(30f));
 
             var vertices = new List<Vector3>();
             var uvs = new List<Vector2>();
@@ -58,8 +60,7 @@ namespace MonsterMiner.World
 
             for (float contentX = minX; contentX <= maxX; contentX += cellSize)
             {
-                float shoreZ = LandQuarry2Boundary.SampleLakeSouthShoreLocalZ(contentX);
-                for (float contentZ = minZ; contentZ <= Mathf.Min(maxZ, shoreZ); contentZ += cellSize)
+                for (float contentZ = minZ; contentZ <= maxZ; contentZ += cellSize)
                 {
                     float centerX = contentX + cellSize * 0.5f;
                     float centerZ = contentZ + cellSize * 0.5f;

@@ -96,13 +96,28 @@ namespace MonsterMiner.World
             if (LandQuarry2Boundary.IsSnowGroundLocal(localX, localZ))
                 return true;
 
-            if (LakeCatalog.IsLakeLocal(localX, localZ))
-                return true;
-
             if (LakeCatalog.IsBeachLocal(localX, localZ))
                 return true;
 
             if (LakeCatalog.IsLakeIslandLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsOpenWaterLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsLakeLocal(localX, localZ))
+                return true;
+
+            return false;
+        }
+
+        static bool ShouldExcludePlainsTriangleVertices(Vector3 a, Vector3 b, Vector3 c)
+        {
+            if (ShouldExcludePlainsTriangle(a.x, a.z))
+                return true;
+            if (ShouldExcludePlainsTriangle(b.x, b.z))
+                return true;
+            if (ShouldExcludePlainsTriangle(c.x, c.z))
                 return true;
 
             return false;
@@ -235,7 +250,9 @@ namespace MonsterMiner.World
                     Vector3 p1 = vertices[topLeft];
                     Vector3 p2 = vertices[topRight];
                     Vector3 triCenterA = (p0 + p1 + p2) / 3f;
-                    if (excludeTriangleAt == null || !excludeTriangleAt(triCenterA.x, triCenterA.z))
+                    if (excludeTriangleAt == null
+                        || (!ShouldExcludePlainsTriangleVertices(p0, p1, p2)
+                            && !excludeTriangleAt(triCenterA.x, triCenterA.z)))
                     {
                         triangles.Add(bottomLeft);
                         triangles.Add(topLeft);
@@ -244,7 +261,9 @@ namespace MonsterMiner.World
 
                     Vector3 p3 = vertices[bottomRight];
                     Vector3 triCenterB = (p0 + p2 + p3) / 3f;
-                    if (excludeTriangleAt == null || !excludeTriangleAt(triCenterB.x, triCenterB.z))
+                    if (excludeTriangleAt == null
+                        || (!ShouldExcludePlainsTriangleVertices(p0, p2, p3)
+                            && !excludeTriangleAt(triCenterB.x, triCenterB.z)))
                     {
                         triangles.Add(bottomLeft);
                         triangles.Add(topRight);
@@ -317,8 +336,15 @@ namespace MonsterMiner.World
 
             void AddTriangle(int a, int b, int c, float centerX, float centerZ)
             {
-                if (excludeTriangleAt != null && excludeTriangleAt(centerX, centerZ))
-                    return;
+                if (excludeTriangleAt != null)
+                {
+                    Vector3 p0 = vertices[a];
+                    Vector3 p1 = vertices[b];
+                    Vector3 p2 = vertices[c];
+                    if (ShouldExcludePlainsTriangleVertices(p0, p1, p2)
+                        || excludeTriangleAt(centerX, centerZ))
+                        return;
+                }
 
                 var target = ClassifyGroundPatch(centerX, centerZ) switch
                 {
