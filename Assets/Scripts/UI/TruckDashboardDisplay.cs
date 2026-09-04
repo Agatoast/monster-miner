@@ -8,6 +8,7 @@ namespace MonsterMiner.UI
     {
         const float GaugeMaxMph = 70f;
         const float DashHeightPixels = 300f;
+        public const float DashboardHeightPixels = DashHeightPixels;
         const float SpeedometerRightOffsetPixels = 200f;
         const float SteerMaxDegrees = 55f;
         const float SteerTurnSpeed = 260f;

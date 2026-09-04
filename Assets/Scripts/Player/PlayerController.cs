@@ -162,6 +162,7 @@ namespace MonsterMiner.Player
                 || MinerTurnInPopupDisplay.IsActive
                 || DeathScreenDisplay.IsActive
                 || ArtilleryPauseDisplay.IsOpen
+                || GamePauseDisplay.IsOpen
                 || MainMenuDisplay.IsActive;
         }
 
@@ -174,7 +175,8 @@ namespace MonsterMiner.Player
             return ctx != null
                 && (ctx.IsPlayerDead
                     || DeathScreenDisplay.IsActive
-                    || MinerTurnInPopupDisplay.IsActive);
+                    || MinerTurnInPopupDisplay.IsActive
+                    || GamePauseDisplay.IsOpen);
         }
 
         void FixedUpdate()

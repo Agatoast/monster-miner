@@ -30,6 +30,7 @@ namespace MonsterMiner.UI
         static string secondaryButtonLabel;
         static string okButtonHint;
         static string secondaryButtonHint;
+        static Texture2D panelImage;
 
         public static bool IsActive => isActive;
 
@@ -49,11 +50,30 @@ namespace MonsterMiner.UI
             okOnlyDismiss = okOnly;
             confirmationMode = false;
             onDismiss = dismissCallback;
+            panelImage = null;
             MinerTurnInPopupDisplay.secondaryButtonLabel = secondaryButtonLabel;
             MinerTurnInPopupDisplay.okButtonHint = okButtonHint;
             MinerTurnInPopupDisplay.secondaryButtonHint = secondaryButtonHint;
             onSecondary = secondaryCallback;
             isActive = !string.IsNullOrEmpty(body);
+            shownFrame = Time.frameCount;
+        }
+
+        public static void ShowWithImage(
+            string text,
+            string imageResourcePath,
+            bool centerBody = false,
+            Action dismissCallback = null,
+            bool okOnly = true)
+        {
+            ResetCallbacks();
+            body = text ?? string.Empty;
+            centerBodyText = centerBody;
+            okOnlyDismiss = okOnly;
+            confirmationMode = false;
+            onDismiss = dismissCallback;
+            panelImage = LoadPanelImage(imageResourcePath);
+            isActive = !string.IsNullOrEmpty(body) || panelImage != null;
             shownFrame = Time.frameCount;
         }
 
@@ -124,10 +144,25 @@ namespace MonsterMiner.UI
 
             var style = centerBodyText ? centeredBodyStyle : bodyStyle;
             var content = new GUIContent(body);
-            float textWidth = Mathf.Min(PanelWidth, Screen.width - 24f) - PanelPadding * 2f;
-            float textHeight = style.CalcHeight(content, textWidth);
             float panelWidth = Mathf.Min(PanelWidth, Screen.width - 24f);
-            float panelHeight = PanelPadding + textHeight + 32f + ButtonHeight + 36f + 40f;
+            float textWidth = panelWidth - PanelPadding * 2f;
+            float imageHeight = 0f;
+            if (panelImage != null)
+            {
+                float imageWidth = textWidth;
+                imageHeight = imageWidth * ((float)panelImage.height / panelImage.width);
+                imageHeight = Mathf.Min(imageHeight, Screen.height * 0.42f);
+            }
+
+            float textHeight = string.IsNullOrEmpty(body)
+                ? 0f
+                : style.CalcHeight(content, textWidth);
+            float panelHeight = PanelPadding;
+            if (imageHeight > 0f)
+                panelHeight += imageHeight + 24f;
+            if (textHeight > 0f)
+                panelHeight += textHeight;
+            panelHeight += 32f + ButtonHeight + 36f + 40f;
             if (!string.IsNullOrEmpty(secondaryButtonLabel))
                 panelHeight += string.IsNullOrEmpty(okButtonHint) && string.IsNullOrEmpty(secondaryButtonHint)
                     ? 40f
@@ -144,15 +179,34 @@ namespace MonsterMiner.UI
             GUI.DrawTexture(panelRect, Texture2D.whiteTexture);
             DrawBorder(panelRect, new Color(0.55f, 0.45f, 0.25f));
 
-            GUI.color = Color.white;
-            GUI.Label(
-                new Rect(
+            float contentY = panelRect.y + PanelPadding;
+            if (panelImage != null)
+            {
+                var imageRect = new Rect(
                     panelRect.x + PanelPadding,
-                    panelRect.y + PanelPadding,
-                    panelRect.width - PanelPadding * 2f,
-                    textHeight),
-                content,
-                style);
+                    contentY,
+                    textWidth,
+                    imageHeight);
+                GUI.DrawTexture(imageRect, panelImage, ScaleMode.ScaleToFit);
+                contentY = imageRect.yMax + 24f;
+            }
+
+            if (textHeight > 0f)
+            {
+                GUI.color = Color.white;
+                GUI.Label(
+                    new Rect(
+                        panelRect.x + PanelPadding,
+                        contentY,
+                        textWidth,
+                        textHeight),
+                    content,
+                    style);
+            }
+            else
+            {
+                GUI.color = Color.white;
+            }
 
             float buttonY = panelRect.yMax - 36f - 32f - ButtonHeight;
             if (confirmationMode)
@@ -274,10 +328,19 @@ namespace MonsterMiner.UI
         {
             isActive = false;
             body = string.Empty;
+            panelImage = null;
             shownFrame = -1;
             okOnlyDismiss = false;
             confirmationMode = false;
             ResetCallbacks();
+        }
+
+        static Texture2D LoadPanelImage(string resourcePath)
+        {
+            if (string.IsNullOrEmpty(resourcePath))
+                return null;
+
+            return Resources.Load<Texture2D>(resourcePath);
         }
 
         static void DrawBorder(Rect rect, Color color)

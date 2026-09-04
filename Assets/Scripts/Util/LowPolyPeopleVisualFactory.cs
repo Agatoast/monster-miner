@@ -93,6 +93,7 @@ namespace MonsterMiner.Util
 
             var interactCollider = character.AddComponent<BoxCollider>();
             FitBoxColliderToRenderers(character, interactCollider);
+            interactCollider.isTrigger = true;
             character.AddComponent<ShopSellStation>();
             return character;
         }
@@ -318,8 +319,20 @@ namespace MonsterMiner.Util
 
         static void DisableColliders(GameObject root)
         {
-            foreach (var collider in root.GetComponentsInChildren<Collider>(true))
-                Object.Destroy(collider);
+            var colliders = root.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                var collider = colliders[i];
+                if (collider == null)
+                    continue;
+
+                if (Application.isPlaying)
+                    Object.DestroyImmediate(collider);
+                else
+                    Object.Destroy(collider);
+            }
+
+            Physics.SyncTransforms();
         }
     }
 }

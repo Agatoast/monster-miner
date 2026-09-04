@@ -52,10 +52,15 @@ namespace MonsterMiner.Util
 
         static void ConfigureInteract(GameObject orin)
         {
+            StripImportedColliders(orin);
+            StripRigidbodies(orin);
+
             var interactCollider = orin.AddComponent<BoxCollider>();
             FitInteractCollider(orin, interactCollider);
             interactCollider.isTrigger = true;
-            orin.AddComponent<OrinQuestNpc>();
+
+            if (orin.GetComponent<OrinQuestNpc>() == null)
+                orin.AddComponent<OrinQuestNpc>();
         }
 
         static void FitInteractCollider(GameObject orin, BoxCollider collider, float padding = 0.08f)
@@ -124,7 +129,7 @@ namespace MonsterMiner.Util
                 skinnedRenderer.updateWhenOffscreen = true;
 
             ApplyHammerHoldPose(orin.transform);
-            StripColliders(orin);
+            StripImportedColliders(orin);
         }
 
         static void AttachMjolnir(GameObject orin)
@@ -149,7 +154,7 @@ namespace MonsterMiner.Util
             mjolnir.transform.localRotation = Quaternion.Euler(MjolnirHandLocalEuler);
             mjolnir.transform.localScale = MjolnirHandLocalScale;
             KnifeVisualFactory.ApplyUrpMaterials(mjolnir);
-            StripColliders(mjolnir);
+            StripImportedColliders(mjolnir);
         }
 
         static void ApplyHammerHoldPose(Transform root)
@@ -201,10 +206,43 @@ namespace MonsterMiner.Util
             return true;
         }
 
+        static void StripImportedColliders(GameObject root)
+        {
+            var colliders = root.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                var collider = colliders[i];
+                if (collider == null)
+                    continue;
+
+                if (Application.isPlaying)
+                    Object.DestroyImmediate(collider);
+                else
+                    Object.Destroy(collider);
+            }
+
+            Physics.SyncTransforms();
+        }
+
+        static void StripRigidbodies(GameObject root)
+        {
+            var rigidbodies = root.GetComponentsInChildren<Rigidbody>(true);
+            for (int i = 0; i < rigidbodies.Length; i++)
+            {
+                var rigidbody = rigidbodies[i];
+                if (rigidbody == null)
+                    continue;
+
+                if (Application.isPlaying)
+                    Object.DestroyImmediate(rigidbody);
+                else
+                    Object.Destroy(rigidbody);
+            }
+        }
+
         static void StripColliders(GameObject root)
         {
-            foreach (var collider in root.GetComponentsInChildren<Collider>(true))
-                Object.Destroy(collider);
+            StripImportedColliders(root);
         }
 
         static Transform FindBone(Transform root, string boneName)

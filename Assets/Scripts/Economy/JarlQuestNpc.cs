@@ -49,6 +49,8 @@ namespace MonsterMiner.Economy
                 return;
             }
 
+            ctx.CaveProgression.MarkJarlIntroHeard();
+
             if (HasJormungandrSkull(ctx))
             {
                 var skull = ctx.Database?.jormungandrSkullItem;

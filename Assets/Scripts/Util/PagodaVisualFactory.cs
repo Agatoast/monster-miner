@@ -27,6 +27,8 @@ namespace MonsterMiner.Util
             pagoda.transform.localRotation = localRotation;
             pagoda.transform.localPosition = localPosition;
             KnifeVisualFactory.ApplyUrpMaterials(pagoda);
+            StripImportedColliders(pagoda);
+            StripRigidbodies(pagoda);
             AlignBaseCenterToLocalPoint(pagoda, parent, localPosition);
             FloorAnchor.SnapBottomToFloor(pagoda, floorWorldY);
             return pagoda;
@@ -63,6 +65,40 @@ namespace MonsterMiner.Util
             }
 
             return true;
+        }
+
+        static void StripImportedColliders(GameObject root)
+        {
+            var colliders = root.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                var collider = colliders[i];
+                if (collider == null)
+                    continue;
+
+                if (Application.isPlaying)
+                    Object.DestroyImmediate(collider);
+                else
+                    Object.Destroy(collider);
+            }
+
+            Physics.SyncTransforms();
+        }
+
+        static void StripRigidbodies(GameObject root)
+        {
+            var rigidbodies = root.GetComponentsInChildren<Rigidbody>(true);
+            for (int i = 0; i < rigidbodies.Length; i++)
+            {
+                var body = rigidbodies[i];
+                if (body == null)
+                    continue;
+
+                if (Application.isPlaying)
+                    Object.DestroyImmediate(body);
+                else
+                    Object.Destroy(body);
+            }
         }
     }
 }

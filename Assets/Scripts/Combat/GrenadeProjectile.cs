@@ -1,4 +1,5 @@
 using MonsterMiner.Core;
+using MonsterMiner.UI;
 using MonsterMiner.Util;
 using MonsterMiner.World;
 using UnityEngine;
@@ -77,6 +78,7 @@ namespace MonsterMiner.Combat
                 var egg = hit.GetComponentInParent<MonsterEgg>();
                 if (egg != null)
                 {
+                    CombatHitFeedbackDisplay.ShowImpact(egg.transform.position, damage);
                     egg.TakeDamage(damage, fromPickaxe: false);
                     continue;
                 }

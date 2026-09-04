@@ -51,7 +51,10 @@ namespace MonsterMiner.Core
             var builder = cavernGo.AddComponent<CavernBuilder>();
             ctx.CavernBounds = builder.Build(Vector3.zero);
             Physics.SyncTransforms();
-            SetupLandStart(ctx);
+            if (DevTestLoadout.SkipLandStartForFreshPlateau)
+                ctx.PlayerSpawnPoint = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
+            else
+                SetupLandStart(ctx);
             if (ctx.PlayerSpawnPoint == Vector3.zero)
                 ctx.PlayerSpawnPoint = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
 
@@ -145,9 +148,55 @@ namespace MonsterMiner.Core
             if (spawn == Vector3.zero)
                 spawn = ResolvePlayerSpawnPoint(ctx.CavernBounds, Vector3.zero);
             ctx.PlayerSpawnPoint = spawn;
+            if (!DevTestLoadout.SkipLandStartForFreshPlateau)
+                ctx.CaveProgression?.CompleteMinerHeartTurnIn();
+            DevTestLoadout.Apply(ctx);
+            ctx.CaveProgression?.SyncUnlockedLandmarks();
+
+            if (QuarryCatalog.SpawnPlayerAtThirdSkyMetalSiteForTesting)
+            {
+                ctx.CaveProgression?.GrantSkyMetalDetector();
+                ctx.CaveProgression?.CompleteFirstSkyMetalDig();
+                ctx.CaveProgression?.CompleteSecondSkyMetalDig();
+                SkyMetalDigSiteManager.EnsureThirdSiteSpawned();
+            }
+            else if (QuarryCatalog.SpawnPlayerAtSecondSkyMetalSiteForTesting)
+            {
+                ctx.CaveProgression?.CompleteJarlSkullQuest();
+                ctx.CaveProgression?.UnlockLandQuarry4();
+                ctx.CaveProgression?.GrantWorldMap();
+                ctx.CaveProgression?.NotifyLandedOnLand();
+                ctx.CaveProgression?.GrantSkyMetalDetector();
+                ctx.CaveProgression?.CompleteFirstSkyMetalDig();
+                SkyMetalDigSiteManager.EnsureSecondSiteSpawned();
+            }
+            else if (QuarryCatalog.SpawnPlayerAtFirstSkyMetalSiteForTesting)
+                ctx.CaveProgression?.GrantSkyMetalDetector();
+
             if (ctx.Player != null)
             {
-                if (QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
+                if (QuarryCatalog.SpawnPlayerAtThirdSkyMetalSiteForTesting)
+                {
+                    spawn = QuarryCatalog.ResolveThirdSkyMetalSitePlayerSpawnWorld(ctx.CavernBounds);
+                    ctx.PlayerSpawnPoint = spawn;
+                    ctx.Player.Respawn(spawn);
+                    ctx.Player.ResetViewPitch(0f);
+                }
+                else if (QuarryCatalog.SpawnPlayerAtSecondSkyMetalSiteForTesting)
+                {
+                    spawn = QuarryCatalog.ResolveSecondSkyMetalSitePlayerSpawnWorld(ctx.CavernBounds);
+                    ctx.PlayerSpawnPoint = spawn;
+                    ctx.Player.Respawn(spawn);
+                    ctx.Player.ResetViewPitch(0f);
+                }
+                else if (QuarryCatalog.SpawnPlayerAtFirstSkyMetalSiteForTesting)
+                {
+                    spawn = QuarryCatalog.ResolveFirstSkyMetalSitePlayerSpawnWorld(ctx.CavernBounds);
+                    ctx.PlayerSpawnPoint = spawn;
+                    ctx.Player.Respawn(spawn);
+                    ctx.Player.ResetViewPitch(0f);
+                }
+                else if (QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
                 {
                     spawn = QuarryCatalog.ResolveQuarry4PlayerSpawnWorld(ctx.CavernBounds);
                     ctx.PlayerSpawnPoint = spawn;
@@ -182,6 +231,9 @@ namespace MonsterMiner.Core
 
                 if (!QuarryCatalog.SpawnPlayerAtQuarry3ForTesting
                     && !QuarryCatalog.SpawnPlayerAtQuarry4ForTesting
+                    && !QuarryCatalog.SpawnPlayerAtFirstSkyMetalSiteForTesting
+                    && !QuarryCatalog.SpawnPlayerAtSecondSkyMetalSiteForTesting
+                    && !QuarryCatalog.SpawnPlayerAtThirdSkyMetalSiteForTesting
                     && ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2 && ctx.CavernBounds != null)
                 {
                     Vector3 boatLocal = LakeCatalog.GetBoatBeachContentLocal(
@@ -203,9 +255,6 @@ namespace MonsterMiner.Core
             }
             else
                 playerGo.transform.position = spawn;
-
-            ctx.CaveProgression?.CompleteMinerHeartTurnIn();
-            DevTestLoadout.Apply(ctx);
 
             yield return null;
             ctx.Player?.ResetViewPitch(0f);
@@ -229,7 +278,11 @@ namespace MonsterMiner.Core
             if (ctx?.CavernBounds == null)
                 return;
 
-            if (QuarryCatalog.SpawnPlayerAtQuarry3ForTesting || QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
+            if (QuarryCatalog.SpawnPlayerAtQuarry3ForTesting
+                || QuarryCatalog.SpawnPlayerAtQuarry4ForTesting
+                || QuarryCatalog.SpawnPlayerAtFirstSkyMetalSiteForTesting
+                || QuarryCatalog.SpawnPlayerAtSecondSkyMetalSiteForTesting
+                || QuarryCatalog.SpawnPlayerAtThirdSkyMetalSiteForTesting)
                 ctx.CaveProgression?.CompleteJarlSkullQuest();
 
             if (QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
@@ -253,7 +306,10 @@ namespace MonsterMiner.Core
                 && !QuarryCatalog.SpawnPlayerOnIslandForTesting
                 && !QuarryCatalog.SpawnPlayerAtJarlLandShopForTesting
                 && !QuarryCatalog.SpawnPlayerAtQuarry3ForTesting
-                && !QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
+                && !QuarryCatalog.SpawnPlayerAtQuarry4ForTesting
+                && !QuarryCatalog.SpawnPlayerAtFirstSkyMetalSiteForTesting
+                && !QuarryCatalog.SpawnPlayerAtSecondSkyMetalSiteForTesting
+                && !QuarryCatalog.SpawnPlayerAtThirdSkyMetalSiteForTesting)
             {
                 ctx.PlayerSpawnPoint = LakeCatalog.ResolveBoatSandSpawnWorld(
                     ctx.CavernBounds,

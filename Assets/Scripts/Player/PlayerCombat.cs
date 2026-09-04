@@ -164,7 +164,9 @@ namespace MonsterMiner.Player
 
             var monster = hit.collider.GetComponentInParent<Monster>();
             if (monster != null)
-                monster.TakeDamage(damage, hit.point, direction);
+                monster.TakeDamage(damage, hit.point, direction, fromRangedWeapon: true);
+            else
+                CombatHitFeedbackDisplay.ShowImpact(hit.point);
         }
 
         void PerformShotgunAttack(float damage)
@@ -192,7 +194,7 @@ namespace MonsterMiner.Player
                 if (Vector3.Angle(forward, direction) > maxAngle)
                     continue;
 
-                monster.TakeDamage(damage, monster.transform.position, direction);
+                monster.TakeDamage(damage, monster.transform.position, direction, fromRangedWeapon: true);
             }
         }
 
@@ -202,14 +204,34 @@ namespace MonsterMiner.Player
             var origin = cam.position;
             var direction = cam.forward;
 
-            if (!Physics.SphereCast(origin, 0.25f, direction, out var hit, MeleeAttackRange))
+            if (!Physics.SphereCast(
+                    origin,
+                    0.25f,
+                    direction,
+                    out var hit,
+                    MeleeAttackRange,
+                    Physics.DefaultRaycastLayers,
+                    IsPickaxeSelected() ? QueryTriggerInteraction.Collide : QueryTriggerInteraction.Ignore))
                 return;
+
+            if (IsPickaxeSelected() && SkyMetalDigSiteManager.TryRegisterPickaxeStrike(hit))
+            {
+                CombatHitFeedbackDisplay.ShowImpact(hit.point);
+                return;
+            }
 
             var egg = hit.collider.GetComponentInParent<MonsterEgg>();
             if (egg != null)
             {
                 if (IsPickaxeSelected())
-                    egg.TakeDamage(GetPickaxeEggDamage(), fromPickaxe: true);
+                {
+                    float damage = GetPickaxeEggDamage();
+                    CombatHitFeedbackDisplay.ShowImpact(hit.point, damage);
+                    egg.TakeDamage(damage, fromPickaxe: true);
+                }
+                else
+                    CombatHitFeedbackDisplay.ShowImpact(hit.point);
+
                 return;
             }
 
@@ -220,7 +242,10 @@ namespace MonsterMiner.Player
                     monster.TakeDamage(GetPickaxeDamage(), hit.point, direction);
                 else if (IsMeleeWeaponSelected())
                     monster.TakeDamage(GetSelectedWeaponDamage(), hit.point, direction);
+                return;
             }
+
+            CombatHitFeedbackDisplay.ShowImpact(hit.point);
         }
 
         bool IsPickaxeSelected()

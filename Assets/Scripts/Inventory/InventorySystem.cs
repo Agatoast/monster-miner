@@ -312,6 +312,9 @@ namespace MonsterMiner.Inventory
             if (IsPentachickHeart(item) && ContainsItem(item))
                 return false;
 
+            if (IsSkyMetalLump(item) && ContainsItem(item))
+                return false;
+
             if (item.isMiningGlove || IsPickaxeItem(item))
                 return amount <= 1;
 
@@ -481,7 +484,7 @@ namespace MonsterMiner.Inventory
             for (int i = 0; i < slots.Count; i++)
             {
                 var slot = slots[i];
-                if (slot.IsEmpty || IsSlotTestToken(slot.item))
+                if (slot.IsEmpty || IsSlotTestToken(slot.item) || IsSkyMetalLump(slot.item))
                     continue;
 
                 for (int n = 0; n < slot.count; n++)
@@ -539,6 +542,9 @@ namespace MonsterMiner.Inventory
             if (weaponId == "legendary_blade")
                 return "knife";
 
+            if (weaponId == "legendary_sky_metal_machinegun")
+                return "machinegun";
+
             const string prefix = "legendary_";
             return weaponId.StartsWith(prefix) ? weaponId.Substring(prefix.Length) : weaponId;
         }
@@ -594,6 +600,8 @@ namespace MonsterMiner.Inventory
             item != null && ResolveBaseWeaponId(item) == "rifle";
 
         public static bool IsPentachickHeart(ItemDefinition item) => item != null && item.itemId == "pentachick_heart";
+
+        public static bool IsSkyMetalLump(ItemDefinition item) => item != null && item.itemId == "sky_metal_lump";
 
         public static bool IsJormungandrSkull(ItemDefinition item) => item != null && item.itemId == "jormungandr_skull";
 

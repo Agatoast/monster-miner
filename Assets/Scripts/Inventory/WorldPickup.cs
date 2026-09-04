@@ -2,6 +2,7 @@
 using MonsterMiner.Data;
 using MonsterMiner.Interaction;
 using MonsterMiner.Util;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.Inventory
@@ -28,6 +29,11 @@ namespace MonsterMiner.Inventory
                 go = SkullVisualFactory.CreateWorldDrop(position, item.displayName);
                 AttachStaticRigidbody(go, 0.3f);
             }
+            else if (item.itemId == "sky_metal_lump")
+            {
+                go = SkyMetalLumpVisualFactory.CreateWorldDrop(position, item.displayName);
+                AttachStaticRigidbody(go, 0.35f);
+            }
             else
             {
                 go = MeatVisualFactory.CreateWorldItemDrop(position, item);
@@ -43,6 +49,12 @@ namespace MonsterMiner.Inventory
             Item = item;
             Count = count;
             TrackAsWorldPebble = trackAsWorldPebble;
+        }
+
+        void OnDestroy()
+        {
+            if (InventorySystem.IsSkyMetalLump(Item))
+                SkyMetalLumpTracker.NotifyDestroyed(this);
         }
 
         public string GetPrompt()
@@ -63,7 +75,18 @@ namespace MonsterMiner.Inventory
             {
                 if (Item.itemId == "shiny_pebble" && TrackAsWorldPebble)
                     ctx.SpawnManager?.NotifyPebblePickedUp();
+                if (InventorySystem.IsSkyMetalLump(Item))
+                    SkyMetalLumpTracker.NotifyPickedUp(this);
                 Destroy(gameObject);
+                return;
+            }
+
+            if (InventorySystem.IsSkyMetalLump(Item))
+            {
+                if (ctx.Inventory.ContainsItem(Item))
+                    ctx.Hud?.ShowMessage("You already have the Sky-Metal Lump.");
+                else
+                    ctx.Hud?.ShowMessage("Need an empty inventory slot for the Sky-Metal Lump.");
                 return;
             }
 

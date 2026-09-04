@@ -55,6 +55,9 @@ namespace MonsterMiner.World
 
             ConfigureSpawnExclusions(bounds, root, orin, blacksmith, shop.ShopRoot);
 
+            QuarryCatalog.MapOrinLocalXZ = SkyMetalDigSiteCatalog.GetOrinContentLocalXZ();
+            QuarryCatalog.MapDragonLocalXZ = QuarryCatalog.GetDragonMapTargetLocal();
+
             PlainsWorldBuilder.RebuildGroundExcludingLandFeatures(parent, bounds);
             GameContext.Instance?.SpawnManager?.CullEggsInSpawnExclusions();
         }

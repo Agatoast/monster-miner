@@ -21,14 +21,25 @@ namespace MonsterMiner.World
         public const bool SpawnPlayerOnIslandForTesting = false;
         public const bool SpawnPlayerAtJarlLandShopForTesting = false;
         public const bool SpawnPlayerAtQuarry3ForTesting = false;
-        public const bool SpawnPlayerAtQuarry4ForTesting = true;
+        public const bool SpawnPlayerAtQuarry4ForTesting = false;
+        public const bool SpawnPlayerAtFirstSkyMetalSiteForTesting = false;
+        public const bool SpawnPlayerAtSecondSkyMetalSiteForTesting = true;
+        public const bool SpawnPlayerAtThirdSkyMetalSiteForTesting = false;
         public const float Quarry3PlayerSpawnInFrontOfGuideFeet = 8f;
         public const float Quarry4PlayerSpawnOffsetFromCenterFeet = 8f;
+        public const float FirstSkyMetalSiteSpawnOffsetFeet = 8f;
+        public const float SecondSkyMetalSiteSpawnOffsetFeet = SkyMetalDigSiteCatalog.SecondSitePlayerSpawnNorthOfDigSiteFeet;
+        public const float ThirdSkyMetalSiteSpawnOffsetFeet = 8f;
         public const float Quarry3ShopNorthOfGuideFeet = 30f;
         public const float Quarry3ShopWestOfGuideFeet = 50f;
         public const float IslandPlayerSpawnOffsetFromCenterFeet = 30f;
         public const float JarlLandShopFrontSpawnFeet = 10f;
         public const string JarlLandDisplayName = "Jarl Land";
+
+        public static readonly Color JarlLandMapColor = new Color(0.2f, 0.85f, 0.3f);
+        public static readonly Color ShogunMapColor = Color.blue;
+        public static readonly Color OrinMapColor = Color.yellow;
+        public static readonly Color DragonMapColor = Color.white;
 
         public const int PlateauQuarryIndex = 1;
         public const int LandQuarry2Index = 2;
@@ -39,7 +50,7 @@ namespace MonsterMiner.World
         /// <summary>Override when Quarry 4 / Orin site is placed; zero uses east-of-Q3 placeholder.</summary>
         public static Vector2 MapOrinLocalXZ;
 
-        /// <summary>Override when Dragon quest site is placed; zero uses east-of-Q4 placeholder.</summary>
+        /// <summary>Override when Dragon quest site is placed; zero uses 1 mi SE of Orin placeholder.</summary>
         public static Vector2 MapDragonLocalXZ;
 
         public readonly struct MapEdgeMarker
@@ -80,24 +91,41 @@ namespace MonsterMiner.World
                 GetTruckLocal),
             new MapEdgeMarker(
                 JarlLandDisplayName,
-                new Color(0.2f, 0.85f, 0.3f),
-                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.JarlSkullQuestComplete,
+                JarlLandMapColor,
+                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.HasWorldMap,
                 _ => GetLandQuarry2Center()),
             new MapEdgeMarker(
                 "Shogun",
-                Color.blue,
+                ShogunMapColor,
                 ctx => ctx?.CaveProgression != null && ctx.CaveProgression.ArtilleryTrialWon,
                 _ => GetLandQuarry3Center()),
             new MapEdgeMarker(
                 "Orin",
-                Color.yellow,
+                OrinMapColor,
                 ctx => ctx?.CaveProgression != null && ctx.CaveProgression.ArtilleryTrialWon,
                 _ => GetOrinMapTargetLocal()),
             new MapEdgeMarker(
                 "Dragon",
-                Color.white,
-                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.Quest5Complete,
+                DragonMapColor,
+                ctx => ctx?.CaveProgression != null
+                    && ctx.CaveProgression.HasLegendarySkyMetalMachineGun
+                    && !ctx.CaveProgression.Quest5Complete,
                 _ => GetDragonMapTargetLocal()),
+            new MapEdgeMarker(
+                SkyMetalDigSiteCatalog.GetMapLabel(SkyMetalDigSiteCatalog.FirstSiteIndex),
+                SkyMetalDigSiteCatalog.DetectorBlue,
+                ctx => IsDiscoveredSkyMetalSite(ctx, SkyMetalDigSiteCatalog.FirstSiteIndex),
+                _ => SkyMetalDigSiteCatalog.GetFirstSiteContentLocalXZ()),
+            new MapEdgeMarker(
+                SkyMetalDigSiteCatalog.GetMapLabel(SkyMetalDigSiteCatalog.SecondSiteIndex),
+                SkyMetalDigSiteCatalog.DetectorBlue,
+                ctx => IsDiscoveredSkyMetalSite(ctx, SkyMetalDigSiteCatalog.SecondSiteIndex),
+                _ => SkyMetalDigSiteCatalog.GetSecondSiteContentLocalXZ()),
+            new MapEdgeMarker(
+                SkyMetalDigSiteCatalog.GetMapLabel(SkyMetalDigSiteCatalog.ThirdSiteIndex),
+                SkyMetalDigSiteCatalog.DetectorBlue,
+                ctx => IsDiscoveredSkyMetalSite(ctx, SkyMetalDigSiteCatalog.ThirdSiteIndex),
+                _ => SkyMetalDigSiteCatalog.GetThirdSiteContentLocalXZ()),
         };
 
         public static Vector2 GetLandQuarry2Center() => new Vector2(0f, WorldScale.Miles(1f));
@@ -127,9 +155,81 @@ namespace MonsterMiner.World
             if (MapDragonLocalXZ.sqrMagnitude > 0.01f)
                 return MapDragonLocalXZ;
 
-            var quarry4 = GetLandQuarry4Center();
-            return new Vector2(quarry4.x + WorldScale.Miles(1f), quarry4.y);
+            var orin = GetOrinMapTargetLocal();
+            return new Vector2(orin.x + WorldScale.Miles(1f), orin.y - WorldScale.Miles(1f));
         }
+
+        public static bool TryGetQuarryGuideCompassTarget(
+            CavernBounds bounds,
+            CaveProgression progression,
+            out Vector3 worldTarget,
+            out Color color)
+        {
+            worldTarget = Vector3.zero;
+            color = default;
+
+            if (bounds == null || progression == null || !progression.HasWorldMap)
+                return false;
+
+            if (progression.HasSkyMetalDetector
+                && SkyMetalDigSiteManager.GetActiveCompassTargetWorld().HasValue)
+                return false;
+
+            if (!progression.HasHeardJarlIntro)
+            {
+                color = JarlLandMapColor;
+                worldTarget = progression.HasLandedOnLand
+                    ? ResolveVikingCharacterSpawnWorld(bounds)
+                    : ResolveQuarryCenterWorld(bounds, LandQuarry2Index);
+                if (worldTarget == Vector3.zero)
+                    worldTarget = ResolveQuarryCenterWorld(bounds, LandQuarry2Index);
+                return worldTarget != Vector3.zero;
+            }
+
+            if (progression.ArtilleryTrialWon && !progression.HasSkyMetalDetector)
+            {
+                color = OrinMapColor;
+                worldTarget = ResolveOrinMapTargetWorld(bounds);
+                return worldTarget != Vector3.zero;
+            }
+
+            if (progression.HasMagicCompass)
+                return false;
+
+            if (progression.HasLegendarySkyMetalMachineGun && !progression.Quest5Complete)
+            {
+                color = DragonMapColor;
+                worldTarget = ResolveDragonMapTargetWorld(bounds);
+                return worldTarget != Vector3.zero;
+            }
+
+            return false;
+        }
+
+        public static Vector3 ResolveDragonMapTargetWorld(CavernBounds bounds)
+        {
+            if (bounds == null)
+                return Vector3.zero;
+
+            Vector2 local = GetDragonMapTargetLocal();
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(local.x, local.y, plainsBaseY);
+            return bounds.transform.TransformPoint(new Vector3(local.x, groundY, local.y));
+        }
+
+        public static Vector3 ResolveOrinMapTargetWorld(CavernBounds bounds)
+        {
+            if (bounds == null)
+                return Vector3.zero;
+
+            Vector2 local = GetOrinMapTargetLocal();
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(local.x, local.y, plainsBaseY);
+            return bounds.transform.TransformPoint(new Vector3(local.x, groundY, local.y));
+        }
+
+        static bool IsDiscoveredSkyMetalSite(GameContext ctx, int siteIndex) =>
+            ctx?.CaveProgression != null && ctx.CaveProgression.HasDiscoveredSkyMetalSite(siteIndex);
 
         public static Vector2 GetLandQuarryCenter(int quarryIndex)
         {
@@ -208,10 +308,60 @@ namespace MonsterMiner.World
             if (!SpawnPlayerOnIslandForTesting
                 && !SpawnPlayerAtQuarry3ForTesting
                 && !SpawnPlayerAtQuarry4ForTesting
+                && !SpawnPlayerAtFirstSkyMetalSiteForTesting
+                && !SpawnPlayerAtSecondSkyMetalSiteForTesting
+                && !SpawnPlayerAtThirdSkyMetalSiteForTesting
                 && PlayerSpawnPersistence.HasSavedLandSpawn)
                 return PlayerSpawnPersistence.LoadSavedLandSpawn();
 
             return ResolvePlayerSpawnWorld(bounds);
+        }
+
+        public static Vector3 ResolveFirstSkyMetalSitePlayerSpawnWorld(CavernBounds bounds)
+        {
+            if (bounds == null)
+                return Vector3.zero;
+
+            Vector2 siteLocal = SkyMetalDigSiteCatalog.GetFirstSiteContentLocalXZ();
+            float offset = WorldScale.Feet(FirstSkyMetalSiteSpawnOffsetFeet);
+            var contentLocal = new Vector3(siteLocal.x, 0f, siteLocal.y - offset);
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            contentLocal.y = PlainsWorldBuilder.SamplePlainsLocalY(contentLocal.x, contentLocal.z, plainsBaseY);
+
+            return PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                bounds.transform.TransformPoint(contentLocal),
+                WorldScale.CharacterHeightUnits * 0.5f);
+        }
+
+        public static Vector3 ResolveSecondSkyMetalSitePlayerSpawnWorld(CavernBounds bounds)
+        {
+            if (bounds == null)
+                return Vector3.zero;
+
+            Vector3 contentLocal = SkyMetalDigSiteCatalog.ResolveSecondSitePlayerSpawnContentLocal();
+
+            return PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                bounds.transform.TransformPoint(contentLocal),
+                WorldScale.CharacterHeightUnits * 0.5f);
+        }
+
+        public static Vector3 ResolveThirdSkyMetalSitePlayerSpawnWorld(CavernBounds bounds)
+        {
+            if (bounds == null)
+                return Vector3.zero;
+
+            Vector2 siteLocal = SkyMetalDigSiteCatalog.GetThirdSiteContentLocalXZ();
+            float offset = WorldScale.Feet(ThirdSkyMetalSiteSpawnOffsetFeet);
+            var contentLocal = new Vector3(siteLocal.x, 0f, siteLocal.y - offset);
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            contentLocal.y = PlainsWorldBuilder.SamplePlainsLocalY(contentLocal.x, contentLocal.z, plainsBaseY);
+
+            return PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                bounds.transform.TransformPoint(contentLocal),
+                WorldScale.CharacterHeightUnits * 0.5f);
         }
 
         public static Vector3 ResolveQuarry3PlayerSpawnWorld(CavernBounds bounds, Transform guide = null)
@@ -250,8 +400,20 @@ namespace MonsterMiner.World
             if (!SpawnPlayerOnIslandForTesting
                 && !SpawnPlayerAtQuarry3ForTesting
                 && !SpawnPlayerAtQuarry4ForTesting
+                && !SpawnPlayerAtFirstSkyMetalSiteForTesting
+                && !SpawnPlayerAtSecondSkyMetalSiteForTesting
+                && !SpawnPlayerAtThirdSkyMetalSiteForTesting
                 && PlayerSpawnPersistence.HasSavedLandSpawn)
                 return PlayerSpawnPersistence.LoadSavedLandSpawn();
+
+            if (SpawnPlayerAtThirdSkyMetalSiteForTesting)
+                return ResolveThirdSkyMetalSitePlayerSpawnWorld(bounds);
+
+            if (SpawnPlayerAtSecondSkyMetalSiteForTesting)
+                return ResolveSecondSkyMetalSitePlayerSpawnWorld(bounds);
+
+            if (SpawnPlayerAtFirstSkyMetalSiteForTesting)
+                return ResolveFirstSkyMetalSitePlayerSpawnWorld(bounds);
 
             if (SpawnPlayerAtQuarry4ForTesting)
                 return ResolveQuarry4PlayerSpawnWorld(bounds);

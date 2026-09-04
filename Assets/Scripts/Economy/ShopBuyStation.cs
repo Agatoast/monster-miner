@@ -19,13 +19,24 @@ namespace MonsterMiner.Economy
         public void Initialize(ShopManager manager)
         {
             shop = manager;
+            EnsureBoardCollider();
+        }
+
+        void EnsureBoardCollider()
+        {
             boardCollider = GetComponent<Collider>();
+            if (boardCollider != null)
+                return;
+
+            var box = gameObject.AddComponent<BoxCollider>();
+            box.center = Vector3.zero;
+            box.size = Vector3.one;
+            boardCollider = box;
         }
 
         public void ConfigureHitbox(Camera camera)
         {
-            if (boardCollider == null)
-                boardCollider = GetComponent<Collider>();
+            EnsureBoardCollider();
 
             if (configuredVisualOffset || boardCollider == null || camera == null)
                 return;

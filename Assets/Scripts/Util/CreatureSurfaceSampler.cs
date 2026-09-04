@@ -62,5 +62,19 @@ namespace MonsterMiner.Util
             float groundY = PlainsWorldBuilder.SamplePlainsLocalY(center.x, center.y, plainsBase);
             return bounds.transform.TransformPoint(new Vector3(center.x, groundY, center.y)).y;
         }
+
+        public static bool IsCreatureGroundLocal(CavernBounds bounds, float localX, float localZ)
+        {
+            if (LakeCatalog.IsLakeIslandLocal(localX, localZ))
+                return true;
+
+            if (LakeCatalog.IsOpenWaterLocal(localX, localZ))
+                return false;
+
+            if (LakeCatalog.IsLakeLocal(localX, localZ))
+                return false;
+
+            return true;
+        }
     }
 }

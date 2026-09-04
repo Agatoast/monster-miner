@@ -1,5 +1,4 @@
 using MonsterMiner.Core;
-using MonsterMiner.Inventory;
 using MonsterMiner.World;
 using UnityEngine;
 
@@ -10,6 +9,7 @@ namespace MonsterMiner.UI
         static readonly Color RingColor = Color.black;
         static readonly Color NorthArrowColor = new Color(0.95f, 0.12f, 0.1f, 1f);
         static readonly Color MagicArrowColor = new Color(0.95f, 0.78f, 0.22f, 1f);
+        static readonly Color SkyMetalArrowColor = SkyMetalDigSiteCatalog.DetectorBlue;
 
         static Material glMaterial;
 
@@ -20,7 +20,15 @@ namespace MonsterMiner.UI
                 return;
 
             DrawNorthCompass(player.ViewCamera);
-            if (ctx.CaveProgression != null && ctx.CaveProgression.HasMagicCompass)
+            if (ctx.CaveProgression != null && ctx.CaveProgression.HasSkyMetalDetector)
+                DrawSkyMetalCompass(player.ViewCamera);
+            else if (QuarryCatalog.TryGetQuarryGuideCompassTarget(
+                         ctx.CavernBounds,
+                         ctx.CaveProgression,
+                         out Vector3 guideTarget,
+                         out Color guideColor))
+                DrawQuarryGuideCompass(player.ViewCamera, player.transform.position, guideTarget, guideColor);
+            else if (ctx.CaveProgression != null && ctx.CaveProgression.HasMagicCompass)
                 DrawMagicCompass(player.ViewCamera, ctx, player.transform.position);
         }
 
@@ -52,14 +60,28 @@ namespace MonsterMiner.UI
             DrawArrow(center, angle, innerRadius, MagicArrowColor);
         }
 
-        static float GetMagicCompassArrowAngle(Camera camera, GameContext ctx, Vector3 playerWorld)
+        static void DrawSkyMetalCompass(Camera camera)
         {
-            if (ctx?.CavernBounds == null)
-                return GetNorthArrowAngle(camera);
+            float innerRadius = HudIconLayout.IconSize * 0.38f * 2f;
+            var center = new Vector2(
+                HudIconLayout.MagicCompassCenterX,
+                HudIconLayout.MagicCompassCenterY(innerRadius));
+            float angle = GetSkyMetalCompassArrowAngle(camera);
+            DrawArrow(center, angle, innerRadius, SkyMetalArrowColor);
+        }
 
-            Vector3 targetWorld = QuarryCatalog.ResolveQuarryCenterWorld(
-                ctx.CavernBounds,
-                QuarryCatalog.LandQuarry3Index);
+        static void DrawQuarryGuideCompass(Camera camera, Vector3 playerWorld, Vector3 targetWorld, Color color)
+        {
+            float innerRadius = HudIconLayout.IconSize * 0.38f * 2f;
+            var center = new Vector2(
+                HudIconLayout.MagicCompassCenterX,
+                HudIconLayout.MagicCompassCenterY(innerRadius));
+            float angle = GetTargetArrowAngle(camera, playerWorld, targetWorld);
+            DrawArrow(center, angle, innerRadius, color);
+        }
+
+        static float GetTargetArrowAngle(Camera camera, Vector3 playerWorld, Vector3 targetWorld)
+        {
             Vector3 toTarget = targetWorld - playerWorld;
             toTarget.y = 0f;
             if (toTarget.sqrMagnitude < 0.01f)
@@ -76,6 +98,30 @@ namespace MonsterMiner.UI
             var targetScreen = new Vector2(toTarget.x, -toTarget.z);
             var forwardScreen = new Vector2(forward.x, -forward.z);
             return Vector2.SignedAngle(forwardScreen, targetScreen);
+        }
+
+        static float GetSkyMetalCompassArrowAngle(Camera camera)
+        {
+            var target = SkyMetalDigSiteManager.GetActiveCompassTargetWorld();
+            if (!target.HasValue)
+                return GetNorthArrowAngle(camera);
+
+            var player = GameContext.Instance?.Player;
+            if (player == null)
+                return GetNorthArrowAngle(camera);
+
+            return GetTargetArrowAngle(camera, player.transform.position, target.Value);
+        }
+
+        static float GetMagicCompassArrowAngle(Camera camera, GameContext ctx, Vector3 playerWorld)
+        {
+            if (ctx?.CavernBounds == null)
+                return GetNorthArrowAngle(camera);
+
+            Vector3 targetWorld = QuarryCatalog.ResolveQuarryCenterWorld(
+                ctx.CavernBounds,
+                QuarryCatalog.LandQuarry3Index);
+            return GetTargetArrowAngle(camera, playerWorld, targetWorld);
         }
 
         static float GetNorthArrowAngle(Camera camera)

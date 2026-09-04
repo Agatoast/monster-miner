@@ -151,6 +151,8 @@ namespace MonsterMiner.Economy
 
             if (activeBuyStation != null && activeBuyStation.IsQuarry4Shop)
             {
+                AddWeaponShopEntry(ctx, ctx.Database.pistolListing);
+                AddWeaponShopEntry(ctx, ctx.Database.rifleListing);
                 AddWeaponShopEntry(ctx, ctx.Database.shotgunListing);
                 AddWeaponShopEntry(ctx, ctx.Database.machinegunListing);
             }
@@ -324,12 +326,10 @@ namespace MonsterMiner.Economy
             if (upgrade == null)
                 return;
 
-            int count = GetPurchaseCount(upgrade.upgradeId);
-            int cost = GetEscalatingCost(upgrade.cost, count);
             menuEntries.Add(new ShopMenuEntry(
                 upgrade.upgradeId,
                 "Water",
-                cost,
+                upgrade.cost,
                 true));
         }
 
@@ -474,6 +474,9 @@ namespace MonsterMiner.Economy
 
         static int GetPurchaseCost(ShopUpgradeDefinition upgrade, int purchaseCount, GameContext ctx)
         {
+            if (upgrade.upgradeType == UpgradeType.Water)
+                return upgrade.cost;
+
             if (upgrade.upgradeType == UpgradeType.PickaxeDamage)
                 return GetEscalatingCost(upgrade.cost, ctx.PlayerCombat.PickaxeMiningTier);
 

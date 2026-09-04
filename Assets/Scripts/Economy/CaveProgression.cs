@@ -30,8 +30,18 @@ namespace MonsterMiner.Economy
         public bool ArtilleryTrialLost { get; private set; }
         public bool Quest5Complete { get; private set; }
 
+        public bool HasHeardJarlIntro { get; private set; }
         public bool HasMagicCompass => JarlSkullQuestComplete && !Quarry3CompassReturned;
+        public bool HasSkyMetalDetector { get; private set; }
+        public bool HasCompletedFirstSkyMetalDig { get; private set; }
+        public bool HasCompletedSecondSkyMetalDig { get; private set; }
+        public bool HasCompletedThirdSkyMetalDig { get; private set; }
+        public bool HasLegendarySkyMetalMachineGun { get; private set; }
         public bool HasBoatRental { get; private set; }
+
+        bool discoveredSkyMetalSite1;
+        bool discoveredSkyMetalSite2;
+        bool discoveredSkyMetalSite3;
         public bool CanEquipMinerWings =>
             HasMinerWingsPermission && !MinerWingsConsumed;
 
@@ -114,15 +124,85 @@ namespace MonsterMiner.Economy
             Quarry3CompassReturned = true;
         }
 
+        public void GrantSkyMetalDetector()
+        {
+            if (HasSkyMetalDetector)
+                return;
+
+            HasSkyMetalDetector = true;
+            SkyMetalDigSiteManager.EnsureForDetector();
+        }
+
+        public void CompleteFirstSkyMetalDig()
+        {
+            if (HasCompletedFirstSkyMetalDig)
+                return;
+
+            HasCompletedFirstSkyMetalDig = true;
+            SkyMetalDigSiteManager.EnsureSecondSiteSpawned();
+        }
+
+        public void CompleteSecondSkyMetalDig()
+        {
+            if (HasCompletedSecondSkyMetalDig)
+                return;
+
+            HasCompletedSecondSkyMetalDig = true;
+            SkyMetalDigSiteManager.EnsureThirdSiteSpawned();
+        }
+
+        public void CompleteThirdSkyMetalDig()
+        {
+            HasCompletedThirdSkyMetalDig = true;
+        }
+
+        public void CompleteSkyMetalMachineGunTurnIn()
+        {
+            HasLegendarySkyMetalMachineGun = true;
+        }
+
+        public bool HasDiscoveredSkyMetalSite(int siteIndex)
+        {
+            return siteIndex switch
+            {
+                SkyMetalDigSiteCatalog.FirstSiteIndex => discoveredSkyMetalSite1,
+                SkyMetalDigSiteCatalog.SecondSiteIndex => discoveredSkyMetalSite2,
+                SkyMetalDigSiteCatalog.ThirdSiteIndex => discoveredSkyMetalSite3,
+                _ => false
+            };
+        }
+
+        public void DiscoverSkyMetalSite(int siteIndex)
+        {
+            switch (siteIndex)
+            {
+                case SkyMetalDigSiteCatalog.FirstSiteIndex:
+                    discoveredSkyMetalSite1 = true;
+                    break;
+                case SkyMetalDigSiteCatalog.SecondSiteIndex:
+                    discoveredSkyMetalSite2 = true;
+                    break;
+                case SkyMetalDigSiteCatalog.ThirdSiteIndex:
+                    discoveredSkyMetalSite3 = true;
+                    break;
+            }
+        }
+
         public void MarkSamuraiIntroHeard()
         {
             HasHeardSamuraiIntro = true;
+        }
+
+        public void MarkJarlIntroHeard()
+        {
+            HasHeardJarlIntro = true;
         }
 
         public void CompleteArtilleryTrial()
         {
             ArtilleryTrialWon = true;
             ArtilleryTrialLost = false;
+            UnlockLandQuarry4();
         }
 
         public void MarkArtilleryTrialLost()
@@ -141,6 +221,15 @@ namespace MonsterMiner.Economy
         public void CompleteBoatRental()
         {
             HasBoatRental = true;
+        }
+
+        public void SyncUnlockedLandmarks()
+        {
+            if (JarlSkullQuestComplete)
+                UnlockLandQuarry3();
+
+            if (ArtilleryTrialWon)
+                UnlockLandQuarry4();
         }
 
         public void CompleteQuest5()

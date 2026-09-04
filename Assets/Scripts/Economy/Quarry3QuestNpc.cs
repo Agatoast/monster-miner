@@ -36,7 +36,7 @@ namespace MonsterMiner.Economy
 
         const string VictoryLetterDialogue =
             "\"Here is the letter of reference that I promised for the legendary weapon maker, Orin Ironbreaker.\"\n\n"
-            + "Even now you think better of correcting the Daimyo's...er...Shogun's misunderstanding of who you are. You got the job done so, isn't that all the matters?\n\n"
+            + "Even now you think better of correcting the Daimyo's...er...Shogun's misunderstanding of who you are. You got the job done so, isn't that all that matters?\n\n"
             + "Besides, who couldn't use a Legendary Weapon crafted by Orin Ironbreaker?";
 
         const string TrialCompleteDialogue =

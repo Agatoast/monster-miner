@@ -33,12 +33,15 @@ namespace MonsterMiner.Combat
         bool forceFlee;
         bool isCarried;
         bool isInAir;
+        bool isEmergingFromBurrow;
+        float burrowEmergenceDepth;
         Vector3 wanderDirection;
         float wanderDirectionTimer;
         Vector3 islandMoveVelocity;
 
         public bool IsCarried => isCarried;
         public bool IsInAir => isInAir;
+        public string MonsterId => definition?.monsterId;
         public bool IsNonAggressiveMonster => IsNonAggressive(definition);
         public bool CanBePickedUp =>
             definition != null
@@ -89,6 +92,47 @@ namespace MonsterMiner.Combat
             return monster;
         }
 
+        public static Monster SpawnEmergingFromBurrow(MonsterDefinition def, Vector3 surfacePoint, float buryDepthFeet)
+        {
+            float buryDepth = WorldScale.Feet(buryDepthFeet);
+            GameObject go = TryCreatePrefabMonster(def, surfacePoint)
+                ?? PrimitiveFactory.CreatePrimitive(PrimitiveType.Capsule, surfacePoint, Vector3.one * def.scale, def.bodyColor, def.displayName);
+
+            if (go.GetComponent<Rigidbody>() == null)
+                PrimitiveFactory.EnsureRigidbody(go, 2f * def.scale);
+
+            var monster = go.GetComponent<Monster>() ?? go.AddComponent<Monster>();
+            monster.Initialize(def);
+            monster.spawnHover = 0f;
+            monster.BeginBurrowEmergence(buryDepth);
+
+            var player = GameContext.Instance?.Player;
+            if (player != null)
+            {
+                Vector3 toPlayer = player.transform.position - surfacePoint;
+                toPlayer.y = 0f;
+                if (toPlayer.sqrMagnitude > 0.01f)
+                    go.transform.rotation = Quaternion.LookRotation(toPlayer.normalized, Vector3.up);
+            }
+
+            monster.AlignToGround(surfacePoint, immediate: true);
+
+            EnforcePlateauShellIfNeeded(go);
+            if (def?.monsterId != "island_taipan")
+                monster.AlignToGround(go.transform.position, immediate: true);
+
+            var body = go.GetComponent<Rigidbody>();
+            if (body != null)
+                body.linearVelocity = Vector3.zero;
+            return monster;
+        }
+
+        public void BeginBurrowEmergence(float buryDepthWorldUnits)
+        {
+            isEmergingFromBurrow = true;
+            burrowEmergenceDepth = buryDepthWorldUnits;
+        }
+
         static GameObject TryCreatePrefabMonster(MonsterDefinition def, Vector3 position)
         {
             if (def == null || string.IsNullOrEmpty(def.visualPrefabResourcePath))
@@ -117,6 +161,9 @@ namespace MonsterMiner.Combat
 
             if (def.visualPrefabResourcePath == "Models/Creatures/mara")
                 return MaraVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
+            if (def.visualPrefabResourcePath == "Models/Creatures/crab_monster")
+                return CrabMonsterVisualFactory.CreateMonster(position, def.scale, def.displayName);
 
             var prefab = Resources.Load<GameObject>(def.visualPrefabResourcePath);
             if (prefab == null)
@@ -179,7 +226,20 @@ namespace MonsterMiner.Combat
                     worldDelta);
             }
 
+            if (!IsCreatureGroundWorld(next))
+                return;
+
             AlignToGround(next);
+        }
+
+        bool IsCreatureGroundWorld(Vector3 worldPos)
+        {
+            var bounds = GameContext.Instance?.CavernBounds;
+            if (bounds == null)
+                return true;
+
+            Vector3 local = bounds.transform.InverseTransformPoint(worldPos);
+            return CreatureSurfaceSampler.IsCreatureGroundLocal(bounds, local.x, local.z);
         }
 
         void TryMoveOnIsland(Vector3 worldDelta)
@@ -253,10 +313,13 @@ namespace MonsterMiner.Combat
             if (bounds != null)
             {
                 var local = bounds.transform.InverseTransformPoint(worldPos);
+                if (!CreatureSurfaceSampler.IsCreatureGroundLocal(bounds, local.x, local.z))
+                    return;
+
                 float surfaceY = SampleSurfaceWorldY(bounds, local.x, local.z);
                 worldPos.y = IsPentachick
                     ? surfaceY + WorldScale.CharacterHeightUnits * 0.5f
-                    : surfaceY + groundOffset + spawnHover;
+                    : surfaceY + groundOffset + spawnHover - burrowEmergenceDepth;
             }
 
             if (rb != null && !immediate)
@@ -359,6 +422,17 @@ namespace MonsterMiner.Combat
 
         void FixedUpdate()
         {
+            if (isEmergingFromBurrow)
+            {
+                burrowEmergenceDepth = Mathf.Max(
+                    0f,
+                    burrowEmergenceDepth - WorldScale.Feet(36f) * Time.fixedDeltaTime);
+                AlignToGround(rb != null ? rb.position : transform.position, immediate: true);
+                if (burrowEmergenceDepth <= 0f)
+                    isEmergingFromBurrow = false;
+                return;
+            }
+
             if (spawnHover > 0f)
             {
                 spawnHover = Mathf.Max(0f, spawnHover - WorldScale.Feet(8f) * Time.fixedDeltaTime);
@@ -438,6 +512,7 @@ namespace MonsterMiner.Combat
                 GetComponent<GremlinLocomotion>()?.PlayAttack();
                 GetComponent<SalamanderLocomotion>()?.PlayAttack();
                 GetComponent<TaipanLocomotion>()?.PlayAttack();
+                GetComponent<SkyMetalAlienLocomotion>()?.PlayAttack();
                 var health = player.GetComponent<Player.PlayerHealth>();
                 health?.TakeDamage(definition.attackDamage);
                 var playerRb = player.GetComponent<Rigidbody>();
@@ -625,7 +700,7 @@ namespace MonsterMiner.Combat
             return (outward * 0.7f + awayFromPlayer * 0.3f).normalized;
         }
 
-        public void TakeDamage(float amount, Vector3 hitPoint, Vector3 hitDirection)
+        public void TakeDamage(float amount, Vector3 hitPoint, Vector3 hitDirection, bool fromRangedWeapon = false)
         {
             if (currentHealth <= 0f)
                 return;
@@ -636,14 +711,21 @@ namespace MonsterMiner.Combat
             if (rb != null && !isCarried && !isInAir)
                 TryMove(hitDirection.normalized * (definition.knockbackForce * 0.05f));
 
-            if (currentHealth <= 0f)
-                Die();
+            if (currentHealth > 0f)
+            {
+                SkyMetalAlienChain.HandleAlienDamaged(this, fromRangedWeapon);
+                return;
+            }
+
+            Die();
         }
 
         void Die()
         {
             if (isCarried)
                 GameContext.Instance?.Player?.GetComponent<PlayerCreatureCarrier>()?.ForceRelease();
+
+            SkyMetalAlienChain.HandleAlienDeath(this);
 
             if (definition.explodesOnDeath)
             {
@@ -658,7 +740,7 @@ namespace MonsterMiner.Combat
                 }
             }
 
-            if (definition.dropItem != null)
+            if (definition.dropItem != null && !SkyMetalAlienCatalog.IsSkyMetalAlienId(definition.monsterId))
                 TryGrantOrDropLoot();
 
             Destroy(gameObject);

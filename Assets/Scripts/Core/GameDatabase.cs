@@ -46,6 +46,7 @@ namespace MonsterMiner.Core
         public ItemDefinition phoenixLureItem;
         public ItemDefinition pentachickHeartItem;
         public ItemDefinition jormungandrSkullItem;
+        public ItemDefinition skyMetalLumpItem;
         public ItemDefinition magicCompassItem;
         public ItemDefinition caveRatFinderItem;
         public ItemDefinition legendaryWeaponItem;
@@ -54,6 +55,7 @@ namespace MonsterMiner.Core
         public ItemDefinition legendaryRifleItem;
         public ItemDefinition legendaryShotgunItem;
         public ItemDefinition legendaryMachinegunItem;
+        public ItemDefinition legendarySkyMetalMachinegunItem;
         public ItemDefinition slotTestTokenItem;
         public ItemDefinition glovesGray;
         public ItemDefinition glovesWhite;
@@ -163,6 +165,11 @@ namespace MonsterMiner.Core
             db.legendaryRifleItem = MakeLegendaryWeapon("rifle", "Rifle", 200, "Textures/Inventory/Rifle");
             db.legendaryShotgunItem = MakeLegendaryWeapon("shotgun", "Shotgun", 30, "Textures/Inventory/Shotgun");
             db.legendaryMachinegunItem = MakeLegendaryWeapon("machinegun", "Machine Gun", 40, "Textures/Inventory/Machinegun");
+            db.legendarySkyMetalMachinegunItem = MakeLegendaryWeapon(
+                "sky_metal_machinegun",
+                "Sky-Metal Machine Gun",
+                40,
+                "Textures/Inventory/Machinegun");
 
             db.glovesGray = MakeGlove("mining_gloves_gray", "Gray Mining Gloves", 0, new Color(0.55f, 0.55f, 0.58f));
             db.glovesWhite = MakeGlove("mining_gloves_white", "White Mining Gloves", 1, new Color(0.92f, 0.92f, 0.92f));
@@ -201,17 +208,27 @@ namespace MonsterMiner.Core
             slotTestToken.canBeSold = false;
             slotTestToken.isSlotTestToken = true;
             db.slotTestTokenItem = slotTestToken;
+            var skyMetalLump = MakeItem(
+                "sky_metal_lump",
+                "Sky-Metal Lump",
+                ItemCategory.Key,
+                0,
+                SkyMetalDigSiteCatalog.DetectorBlue,
+                false);
+            skyMetalLump.canBeSold = false;
+            skyMetalLump.isBossDrop = true;
+            db.skyMetalLumpItem = skyMetalLump;
 
             db.items.AddRange(new[]
             {
                 db.pickaxeItem, db.clubItem, db.knifeItem, db.knifeGreenItem, db.knifeBlueItem, db.knifePurpleItem, db.knifeGoldenItem,
                 db.spearItem, db.pistolItem, db.rifleItem, db.shotgunItem, db.machinegunItem, db.grenadeItem,
                 db.legendaryWeaponItem, db.legendarySpearItem, db.legendaryPistolItem, db.legendaryRifleItem,
-                db.legendaryShotgunItem, db.legendaryMachinegunItem,
+                db.legendaryShotgunItem, db.legendaryMachinegunItem, db.legendarySkyMetalMachinegunItem,
                 db.glovesGray, db.glovesWhite, db.glovesGreen, db.glovesBlue, db.glovesPurple, db.glovesGold,
                 rabbitMeat, iguanaMeat, caveLizardMeat, gremlinMeat, salamanderMeat,
                 core, caveKey, pebble, ore, gremlinFinder, lizardLure, rabbitFinder, caveLizardFinder, salamanderFinder, phoenixLure, pentachickHeart, jormungandrSkull, magicCompass,
-                slotTestToken
+                slotTestToken, skyMetalLump
             });
 
             db.monsters.Add(MakeMonster("iguana", "Iguana", 9f, 12f, 0f, 1f, new Color(0.42f, 0.68f, 0.34f), iguanaMeat, 0f, flees: true, fleeOverEdge: true, prefabPath: "Models/Creatures/iguana"));
@@ -220,6 +237,7 @@ namespace MonsterMiner.Core
             db.monsters.Add(MakeMonster("gremlin", "Gremlin", 11f, 12f, 7f, 1.8f, new Color(0.68f, 0.32f, 0.52f), gremlinMeat, 0f, prefabPath: "Models/Creatures/gremlin"));
             db.monsters.Add(MakeMonster("salamander", "Salamander", 22f, 11f, 9f, 2f, new Color(0.78f, 0.36f, 0.16f), salamanderMeat, 0f, prefabPath: "Models/Creatures/salamander"));
             db.monsters.Add(MakeMonster("pentachick", "Pentachick", 50f, 12f, 15f, 1f, new Color(1f, 0.45f, 0.1f), pentachickHeart, 0f, boss: true, prefabPath: "Models/Creatures/pentachick"));
+            RegisterSkyMetalAliens(db);
             db.monsters.Add(MakeMonster("exploder", "Rare Exploder", 30f, 11f, 10f, 1.1f, new Color(1f, 0.4f, 0.1f), core, 0f, explodes: true));
             db.monsters.Add(MakeMonster("quest_boss", "Quest Monster", 80f, 11f, 16f, 1.6f, new Color(0.6f, 0.1f, 0.8f), caveKey, 0f, boss: true));
 
@@ -277,6 +295,28 @@ namespace MonsterMiner.Core
             db.items.AddRange(level2Items);
 
             return db;
+
+            static void RegisterSkyMetalAliens(GameDatabase db)
+            {
+                var alienColor = new Color(0.35f, 0.55f, 0.62f);
+                for (int tier = 1; tier <= SkyMetalAlienCatalog.TierCount; tier++)
+                {
+                    var alien = MakeMonster(
+                        SkyMetalAlienCatalog.GetMonsterId(tier),
+                        tier == 8 ? "Sky Alien" : $"Sky Alien {tier}",
+                        SkyMetalAlienCatalog.GetMaxHealthForTier(tier),
+                        SkyMetalAlienCatalog.Alien1MoveSpeedMph,
+                        SkyMetalAlienCatalog.Alien1AttackDamage,
+                        SkyMetalAlienCatalog.GetScaleForTier(tier),
+                        alienColor,
+                        null,
+                        0f,
+                        boss: true,
+                        prefabPath: SkyMetalAlienCatalog.CrabPrefabResourcePath);
+                    alien.alwaysChasePlayer = true;
+                    db.monsters.Add(alien);
+                }
+            }
 
             static void RegisterLevel2Creatures(
                 GameDatabase db,

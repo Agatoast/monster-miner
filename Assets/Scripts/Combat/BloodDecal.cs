@@ -1,5 +1,6 @@
 using MonsterMiner.Core;
 using MonsterMiner.Util;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.Combat
@@ -7,8 +8,23 @@ namespace MonsterMiner.Combat
     public class BloodDecal : MonoBehaviour
     {
         const float FloorRestOffset = 0.01f;
+        const int DefaultSpawnCount = 3;
+        const float ScatterRadiusFeet = 5f;
 
         public static void Spawn(Vector3 worldPoint)
+        {
+            float scatterRadius = WorldScale.Feet(ScatterRadiusFeet);
+            for (int i = 0; i < DefaultSpawnCount; i++)
+            {
+                Vector3 offset = new Vector3(
+                    Random.Range(-scatterRadius, scatterRadius),
+                    0f,
+                    Random.Range(-scatterRadius, scatterRadius));
+                SpawnSingle(worldPoint + offset);
+            }
+        }
+
+        static void SpawnSingle(Vector3 worldPoint)
         {
             var pos = ResolveFloorAnchor(worldPoint);
 

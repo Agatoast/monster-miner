@@ -1,4 +1,5 @@
 using MonsterMiner.Core;
+using MonsterMiner.Player;
 using MonsterMiner.Util;
 using MonsterMiner.World;
 using UnityEngine;
@@ -13,11 +14,14 @@ namespace MonsterMiner.UI
         const int MapTextureSize = 256;
         const float PlayerArrowSize = 32f;
         const float EdgeArrowSize = 14f;
-        const float EdgeArrowInset = 8f;
+        const float EdgeArrowInset = 28f;
+        const float EdgeNorthCompassReserve = 36f;
+        const float EdgeMarkerStackSpacing = 34f;
         const float EdgeLabelInsideArrowOffset = 28f;
+        const float EdgeDirectionBucketDegrees = 14f;
         const float EdgeLetterSize = 48f;
         const float EdgeLabelCharWidth = 18f;
-        const float EdgeLabelMaxWidth = 192f;
+        const float EdgeLabelMaxWidth = 260f;
         const int EdgeLabelFontSize = 22;
         const float LocalViewRadiusFeet = 500f;
         const float MapRebakeMoveFeet = 40f;
@@ -104,11 +108,18 @@ namespace MonsterMiner.UI
             Vector2 playerLocal = GetPlayerMapLocal(ctx);
             EnsureMapTexture(ctx.CavernBounds, playerLocal);
 
-            float panelWidth = Mathf.Min(PanelWidth, Screen.width - 24f);
-            float mapSize = Mathf.Min(MapSize, panelWidth - PanelPadding * 2f, Screen.height - 220f);
-            float panelHeight = Mathf.Min(94f + mapSize + 104f, Screen.height - 24f);
+            bool compactForTruck = IsDrivingTruck(ctx);
+            float panelWidth = compactForTruck
+                ? Mathf.Min(760f, Screen.width - 24f)
+                : Mathf.Min(PanelWidth, Screen.width - 24f);
+            float mapSize = compactForTruck
+                ? Mathf.Min(520f, panelWidth - PanelPadding * 2f, GetCompactMapMaxHeight())
+                : Mathf.Min(MapSize, panelWidth - PanelPadding * 2f, Screen.height - 220f);
+            float panelHeight = Mathf.Min(94f + mapSize + 104f, compactForTruck ? mapSize + 170f : Screen.height - 24f);
             float x = Screen.width * 0.5f - panelWidth * 0.5f;
-            float y = Screen.height * 0.5f - panelHeight * 0.5f;
+            float y = compactForTruck
+                ? 24f
+                : Screen.height * 0.5f - panelHeight * 0.5f;
             var panelRect = new Rect(x, y, panelWidth, panelHeight);
 
             GUI.color = new Color(0f, 0f, 0f, 0.5f);
@@ -150,37 +161,127 @@ namespace MonsterMiner.UI
             GUI.color = Color.white;
         }
 
+        struct EdgeMarkerDraw
+        {
+            public Vector2 ScreenDir;
+            public string Label;
+            public Color Color;
+            public float Distance;
+        }
+
         static void DrawEdgeMarkers(Rect mapRect, GameContext ctx, Vector2 playerLocal)
         {
             float viewRadius = WorldScale.Feet(LocalViewRadiusFeet);
+            var pending = new System.Collections.Generic.List<EdgeMarkerDraw>(12);
+
             var markers = QuarryCatalog.EdgeMarkers;
             for (int i = 0; i < markers.Length; i++)
             {
                 if (!markers[i].IsVisible(ctx))
                     continue;
 
-                Vector2 targetLocal = markers[i].GetLocalXZ(ctx);
-                Vector2 delta = targetLocal - playerLocal;
-                if (delta.sqrMagnitude < 0.01f)
-                    continue;
+                TryQueueOffScreenMarker(
+                    pending,
+                    playerLocal,
+                    markers[i].GetLocalXZ(ctx),
+                    markers[i].Label,
+                    markers[i].Color,
+                    viewRadius);
+            }
 
-                if (delta.magnitude <= viewRadius)
-                    continue;
+            if (SkyMetalLumpTracker.TryGetWorldLumpLocal(out Vector2 lumpLocal))
+            {
+                TryQueueOffScreenMarker(
+                    pending,
+                    playerLocal,
+                    lumpLocal,
+                    "Sky-Metal",
+                    SkyMetalDigSiteCatalog.DetectorBlue,
+                    viewRadius);
+            }
 
-                DrawEdgeLetterMarker(mapRect, delta, markers[i].Label, markers[i].Color);
+            DrawStackedEdgeMarkers(mapRect, pending);
+        }
+
+        static void TryQueueOffScreenMarker(
+            System.Collections.Generic.List<EdgeMarkerDraw> pending,
+            Vector2 playerLocal,
+            Vector2 targetLocal,
+            string label,
+            Color color,
+            float viewRadius)
+        {
+            Vector2 delta = targetLocal - playerLocal;
+            if (delta.sqrMagnitude < 0.01f || delta.magnitude <= viewRadius)
+                return;
+
+            Vector2 dir = delta.normalized;
+            pending.Add(new EdgeMarkerDraw
+            {
+                ScreenDir = new Vector2(dir.x, -dir.y),
+                Label = label,
+                Color = color,
+                Distance = delta.magnitude
+            });
+        }
+
+        static void DrawStackedEdgeMarkers(Rect mapRect, System.Collections.Generic.List<EdgeMarkerDraw> markers)
+        {
+            if (markers == null || markers.Count == 0)
+                return;
+
+            markers.Sort((a, b) =>
+            {
+                int bucketA = GetDirectionBucket(a.ScreenDir);
+                int bucketB = GetDirectionBucket(b.ScreenDir);
+                if (bucketA != bucketB)
+                    return bucketA.CompareTo(bucketB);
+
+                return b.Distance.CompareTo(a.Distance);
+            });
+
+            float half = mapRect.width * 0.5f;
+            int bucket = int.MinValue;
+            int stackIndex = 0;
+            for (int i = 0; i < markers.Count; i++)
+            {
+                var marker = markers[i];
+                int markerBucket = GetDirectionBucket(marker.ScreenDir);
+                if (markerBucket != bucket)
+                {
+                    bucket = markerBucket;
+                    stackIndex = 0;
+                }
+                else
+                {
+                    stackIndex++;
+                }
+
+                DrawEdgeLetterMarker(mapRect, marker, half, stackIndex);
             }
         }
 
-        static void DrawEdgeLetterMarker(Rect mapRect, Vector2 delta, string label, Color color)
+        static int GetDirectionBucket(Vector2 screenDir)
         {
-            Vector2 dir = delta.normalized;
-            var screenDir = new Vector2(dir.x, -dir.y);
-            float half = mapRect.width * 0.5f;
-            float arrowRadius = half - EdgeArrowInset;
+            if (screenDir.sqrMagnitude < 0.0001f)
+                return 0;
+
+            float angle = Mathf.Atan2(screenDir.x, -screenDir.y) * Mathf.Rad2Deg;
+            return Mathf.RoundToInt(angle / EdgeDirectionBucketDegrees);
+        }
+
+        static void DrawEdgeLetterMarker(Rect mapRect, EdgeMarkerDraw marker, float half, int stackIndex)
+        {
+            Vector2 screenDir = marker.ScreenDir.normalized;
+            float arrowRadius = half - EdgeArrowInset - stackIndex * EdgeMarkerStackSpacing;
+            if (screenDir.y < -0.45f)
+                arrowRadius -= EdgeNorthCompassReserve;
+
+            arrowRadius = Mathf.Max(half * 0.35f, arrowRadius);
             Vector2 arrowCenter = mapRect.center + screenDir * arrowRadius;
             Vector2 labelCenter = mapRect.center + screenDir * (arrowRadius - EdgeLabelInsideArrowOffset);
 
-            string displayLabel = GetEdgeMarkerLabel(label);
+            string displayLabel = GetEdgeMarkerLabel(marker.Label, marker.Distance);
             float angle = Vector2.SignedAngle(new Vector2(0f, -1f), screenDir);
             float labelWidth = Mathf.Clamp(displayLabel.Length * EdgeLabelCharWidth, EdgeLetterSize, EdgeLabelMaxWidth);
 
@@ -190,19 +291,20 @@ namespace MonsterMiner.UI
                 labelWidth,
                 EdgeLetterSize);
 
-            DrawColoredArrow(arrowCenter, angle, color, EdgeArrowSize);
+            DrawColoredArrow(arrowCenter, angle, marker.Color, EdgeArrowSize);
 
-            GUI.color = color;
+            GUI.color = marker.Color;
             GUI.Label(labelRect, displayLabel, edgeLetterStyle);
             GUI.color = Color.white;
         }
 
-        static string GetEdgeMarkerLabel(string label)
+        static string GetEdgeMarkerLabel(string label, float distanceUnits)
         {
             if (string.IsNullOrEmpty(label))
                 return "?";
 
-            return label;
+            float miles = distanceUnits / WorldScale.Miles(1f);
+            return $"{label} {miles:F1} mi";
         }
 
         static void DrawPlayerMarker(Rect mapRect, GameContext ctx)
@@ -235,10 +337,22 @@ namespace MonsterMiner.UI
             return Vector2.SignedAngle(new Vector2(0f, -1f), screenDir);
         }
 
+        static float GetCompactMapMaxHeight()
+        {
+            float dashTop = Screen.height - TruckDashboardDisplay.DashboardHeightPixels;
+            return Mathf.Max(220f, dashTop - 120f);
+        }
+
+        static bool IsDrivingTruck(GameContext ctx)
+        {
+            var mount = ctx?.Player?.GetComponent<PlayerVehicleMount>();
+            return mount != null && mount.IsDriving && mount.CurrentTruck != null;
+        }
+
         static void DrawCompass(Rect mapRect)
         {
             GUI.color = Color.white;
-            GUI.Label(new Rect(mapRect.x, mapRect.y + 4f, mapRect.width, 18f), "N", titleStyle);
+            GUI.Label(new Rect(mapRect.x, mapRect.y + 2f, mapRect.width, 18f), "N", titleStyle);
         }
 
         static Vector2 GetPlayerMapLocal(GameContext ctx)

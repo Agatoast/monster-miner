@@ -61,6 +61,7 @@ namespace MonsterMiner.UI
             DeathScreenDisplay.HandleInput();
             MinerTurnInPopupDisplay.HandleInput();
             WorldMapDisplay.HandleInput();
+            GamePauseDisplay.HandleInput();
             MainMenuDisplay.HandleInput();
             HudEggHitDisplay.Tick(Time.deltaTime);
             CombatHitFeedbackDisplay.Tick(Time.deltaTime);
@@ -129,6 +130,7 @@ namespace MonsterMiner.UI
                 && !SellConfirmationDisplay.IsActive
                 && !MinerTurnInPopupDisplay.IsActive
                 && !WorldMapDisplay.IsActive
+                && !GamePauseDisplay.IsOpen
                 && !ctx.IsPlayerDead)
             {
                 RangedCrosshairDisplay.Draw(ctx);
@@ -209,6 +211,9 @@ namespace MonsterMiner.UI
 
             TruckDashboardDisplay.Draw(ctx);
             InventoryHotbarDisplay.Draw(ctx);
+
+            if (GamePauseDisplay.IsOpen)
+                GamePauseDisplay.Draw();
 
             if (!string.IsNullOrEmpty(message))
                 GUI.Label(new Rect(Screen.width * 0.5f - 300f, Screen.height - messageBottomOffset, 600f, 40f), message, bigCenter);

@@ -17,7 +17,8 @@ namespace MonsterMiner.Economy
         const string TurnInPopupBody =
             "Thank you for bringing me the Heart of the Pentachick. Now I can save my wife.\n\n"
             + "It looks like the Dragon Stone you are looking for isn't here and you are going to need a way off of this rock. Take my wings. Once you have them on, jump over the edge and you will glide down. When you get down, feel free to use my truck to get around.\n\n"
-            + "Before you go, take this Map to help you find your way.";
+            + "Before you go, take this Map to help you find your way.\n\n"
+            + "I added the location of Jarl's house to the map.";
         const string WingsSpentPrompt = "Those wings will not lift you again.";
 
         public string GetDialogueBody()

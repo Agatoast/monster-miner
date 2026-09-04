@@ -59,9 +59,11 @@ namespace MonsterMiner.Player
             OnHealthChanged?.Invoke(CurrentHealth, MaxHealth);
         }
 
+        public bool IsInvulnerable { get; set; }
+
         public void TakeDamage(float amount)
         {
-            if (IsDead || CurrentHealth <= 0f)
+            if (IsInvulnerable || IsDead || CurrentHealth <= 0f)
                 return;
 
             CurrentHealth = Mathf.Max(0f, CurrentHealth - amount);

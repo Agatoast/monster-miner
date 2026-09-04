@@ -2,6 +2,7 @@ using MonsterMiner.Combat;
 using MonsterMiner.Data;
 using MonsterMiner.Inventory;
 using MonsterMiner.Util;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.Core
@@ -9,15 +10,27 @@ namespace MonsterMiner.Core
     public static class DevTestLoadout
     {
         public const bool Enabled = true;
-        public const bool SpawnAsQuarry2CompleteWithMagicCompass = true;
-        public const bool SpawnWithArtilleryTrialWon = true;
+        public const bool PlayerInvulnerable = true;
+        /// <summary>Plateau spawn with quests/bosses reset; inventory + invulnerability only.</summary>
+        public const bool FreshPlateauPipelineTest = true;
+        public const bool SpawnAsQuarry2CompleteWithMagicCompass = false;
+        public const bool SpawnWithArtilleryTrialWon = false;
         const int MaxInventorySlots = 7;
         const int MachineGunSlotIndex = 2;
+
+        public static bool SkipLandStartForFreshPlateau =>
+            Enabled
+            && FreshPlateauPipelineTest
+            && !QuarryCatalog.SpawnPlayerAtSecondSkyMetalSiteForTesting
+            && !QuarryCatalog.SpawnPlayerAtFirstSkyMetalSiteForTesting
+            && !QuarryCatalog.SpawnPlayerAtThirdSkyMetalSiteForTesting;
 
         public static void Apply(GameContext ctx)
         {
             if (!Enabled || ctx?.Database == null || ctx.Inventory == null || ctx.PlayerCombat == null)
                 return;
+
+            SkyMetalAlienChain.ResetForNewSession();
 
             while (ctx.Inventory.SlotCount < MaxInventorySlots)
                 ctx.Inventory.ExpandSlots(1);
@@ -33,11 +46,14 @@ namespace MonsterMiner.Core
 
             ctx.PlayerRangedAmmo?.Reload("machinegun");
 
-            if (SpawnAsQuarry2CompleteWithMagicCompass)
+            if (!FreshPlateauPipelineTest && SpawnAsQuarry2CompleteWithMagicCompass)
                 ApplyQuarry2CompleteWithMagicCompass(ctx);
 
-            if (SpawnWithArtilleryTrialWon)
+            if (!FreshPlateauPipelineTest && SpawnWithArtilleryTrialWon)
                 ApplyArtilleryTrialWon(ctx);
+
+            if (PlayerInvulnerable && ctx.PlayerHealth != null)
+                ctx.PlayerHealth.IsInvulnerable = true;
 
             ctx.Inventory.SelectSlot(InventorySystem.PickaxeSlotIndex);
         }

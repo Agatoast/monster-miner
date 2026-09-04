@@ -13,7 +13,7 @@ namespace MonsterMiner.Player
         const float SpeedChangeMphPerSecond = 5f;
         const float TurnSpeedDegreesPerSecond = 25f;
         const float DeckBoundaryInsetFeet = 1.1f;
-        const float SolidImpactShakeDuration = 3f;
+        const float SolidImpactShakeDuration = 1f;
         const float SolidImpactShakeIntensity = 0.3f;
         const float SolidImpactCooldownSeconds = 3.1f;
         const float SolidImpactShakeMinSpeedMph = 10f;

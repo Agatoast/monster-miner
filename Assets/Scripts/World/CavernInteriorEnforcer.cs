@@ -74,12 +74,31 @@ namespace MonsterMiner.World
                 if (renderer == null || IsShellRenderer(renderer) || IsPlateauWorldContent(renderer))
                     continue;
 
+                if (IsPlainsGameplayFeature(renderer))
+                    continue;
+
                 Vector3 local = bounds.transform.InverseTransformPoint(renderer.bounds.center);
                 float extent = GetHorizontalBoundsRadius(renderer.gameObject);
                 float centerDistance = new Vector2(local.x, local.z).magnitude;
                 if (centerDistance + extent > bounds.Radius - ShellInset)
                     renderer.enabled = false;
             }
+        }
+
+        static bool IsPlainsGameplayFeature(Renderer renderer)
+        {
+            var transform = renderer.transform;
+            while (transform != null)
+            {
+                string name = transform.name;
+                if (name == SkyMetalSite2ShopBuilder.ShopObjectName
+                    || name.StartsWith("SkyMetalDigSite_"))
+                    return true;
+
+                transform = transform.parent;
+            }
+
+            return false;
         }
 
         static bool IsPlateauWorldContent(Renderer renderer)

@@ -1,4 +1,6 @@
+using MonsterMiner.Inventory;
 using MonsterMiner.Util;
+using MonsterMiner.World;
 using UnityEngine;
 
 namespace MonsterMiner.World
@@ -108,10 +110,7 @@ namespace MonsterMiner.World
             for (int i = 0; i < hits.Length; i++)
             {
                 ref RaycastHit hit = ref hits[i];
-                if (!IsBlocking(hit.collider, self))
-                    continue;
-
-                if (FloorColliderUtility.IsWalkSurfaceCollider(hit.collider))
+                if (!ShouldBlockMovement(hit.collider, self))
                     continue;
 
                 closest = Mathf.Min(closest, hit.distance);
@@ -139,7 +138,7 @@ namespace MonsterMiner.World
                 for (int i = 0; i < overlaps.Length; i++)
                 {
                     Collider other = overlaps[i];
-                    if (!IsBlocking(other, self))
+                    if (!ShouldBlockMovement(other, self))
                         continue;
 
                     if (!Physics.ComputePenetration(
@@ -214,13 +213,22 @@ namespace MonsterMiner.World
             point2 = bounds.center - Vector3.up * (halfHeight - radius);
         }
 
-        static bool IsBlocking(Collider collider, Transform self)
+        static bool ShouldBlockMovement(Collider collider, Transform self)
         {
             if (collider == null || collider.isTrigger)
                 return false;
 
             Transform hitTransform = collider.transform;
             if (self != null && (hitTransform == self || hitTransform.IsChildOf(self)))
+                return false;
+
+            if (FloorColliderUtility.IsWalkSurfaceCollider(collider))
+                return false;
+
+            if (collider.GetComponentInParent<MonsterEgg>() != null)
+                return false;
+
+            if (collider.GetComponentInParent<WorldPickup>() != null)
                 return false;
 
             return true;

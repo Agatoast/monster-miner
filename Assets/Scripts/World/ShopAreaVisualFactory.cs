@@ -51,6 +51,7 @@ namespace MonsterMiner.World
                 "ShopCounter",
                 shopRoot);
             counter.transform.localPosition = new Vector3(0f, counterLocalY, counterLocalZ);
+            StripDecorativeCollider(counter);
 
             GameObject shopkeeper = null;
             if (shopkeeperType != ShopAreaShopkeeperType.None)
@@ -88,6 +89,7 @@ namespace MonsterMiner.World
                 "ShopBoard",
                 shopRoot);
             board.transform.localPosition = new Vector3(-2.2f, 1.8f, counterLocalZ - WorldScale.Feet(3f));
+            StripDecorativeCollider(board);
 
             var slotCab = SlotMachineVisualFactory.CreateShopSlotMachine(
                 shopRoot,
@@ -103,6 +105,21 @@ namespace MonsterMiner.World
                 SlotCab = slotCab,
                 Shopkeeper = shopkeeper
             };
+        }
+
+        static void StripDecorativeCollider(GameObject go)
+        {
+            if (go == null)
+                return;
+
+            var collider = go.GetComponent<Collider>();
+            if (collider == null)
+                return;
+
+            if (Application.isPlaying)
+                Object.DestroyImmediate(collider);
+            else
+                Object.Destroy(collider);
         }
     }
 }

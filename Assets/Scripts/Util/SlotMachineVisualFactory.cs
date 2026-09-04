@@ -283,6 +283,7 @@ namespace MonsterMiner.Util
 
             var box = slotMachineRoot.AddComponent<BoxCollider>();
             FitCabinetBoxCollider(slotMachineRoot, box);
+            box.isTrigger = true;
         }
 
         static void FitCabinetBoxCollider(GameObject root, BoxCollider collider, float padding = 0.05f)

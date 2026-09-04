@@ -18,13 +18,18 @@ namespace MonsterMiner.UI
 
         static readonly List<HitPopup> ActiveHits = new();
         static GUIStyle damageStyle;
-        static Texture2D indicatorTexture;
+        static GUIStyle hitXStyle;
 
         const float DisplayDuration = 0.9f;
-        const float IndicatorDuration = 0.35f;
+        const float IndicatorDuration = 0.45f;
         const int MaxActiveHits = 16;
 
         public static void Show(Vector3 worldPoint, float damage)
+        {
+            ShowImpact(worldPoint, damage);
+        }
+
+        public static void ShowImpact(Vector3 worldPoint, float damage = 0f)
         {
             Vector2 drift = Random.insideUnitCircle;
             if (drift.sqrMagnitude < 0.01f)
@@ -34,7 +39,7 @@ namespace MonsterMiner.UI
             ActiveHits.Add(new HitPopup
             {
                 WorldPoint = worldPoint,
-                Damage = Mathf.Max(1, Mathf.RoundToInt(damage)),
+                Damage = damage > 0f ? Mathf.Max(1, Mathf.RoundToInt(damage)) : 0,
                 TimeLeft = DisplayDuration,
                 Duration = DisplayDuration,
                 DriftVelocity = drift,
@@ -71,11 +76,16 @@ namespace MonsterMiner.UI
                     continue;
 
                 float elapsed = hit.Duration - hit.TimeLeft;
-                float guiX = screen.x + hit.DriftVelocity.x * elapsed;
-                float guiY = Screen.height - screen.y + hit.DriftVelocity.y * elapsed - elapsed * 28f;
+                float indicatorX = screen.x;
+                float indicatorY = Screen.height - screen.y;
+                float guiX = indicatorX + hit.DriftVelocity.x * elapsed;
+                float guiY = indicatorY + hit.DriftVelocity.y * elapsed - elapsed * 28f;
 
                 if (hit.IndicatorTimeLeft > 0f)
-                    DrawHitIndicator(guiX, guiY, hit.IndicatorTimeLeft, hit.IndicatorDuration);
+                    DrawHitIndicator(indicatorX, indicatorY, hit.IndicatorTimeLeft, hit.IndicatorDuration);
+
+                if (hit.Damage <= 0)
+                    continue;
 
                 float alpha = Mathf.Clamp01(hit.TimeLeft / (hit.Duration * 0.45f));
                 damageStyle.normal.textColor = new Color(1f, 0.82f, 0.25f, alpha);
@@ -89,20 +99,17 @@ namespace MonsterMiner.UI
         {
             float t = 1f - Mathf.Clamp01(timeLeft / duration);
             float alpha = Mathf.Clamp01(timeLeft / (duration * 0.6f));
-            float size = Mathf.Lerp(18f, 42f, t);
+            float fontSize = Mathf.Lerp(28f, 52f, t);
 
-            GUI.color = new Color(1f, 0.25f, 0.15f, alpha * 0.85f);
-            var rect = new Rect(guiX - size * 0.5f, guiY - size * 0.5f, size, size);
-            GUI.DrawTexture(rect, GetIndicatorTexture(), ScaleMode.StretchToFill);
+            EnsureStyles();
+            hitXStyle.fontSize = Mathf.RoundToInt(fontSize);
+            hitXStyle.normal.textColor = new Color(1f, 1f, 1f, alpha);
 
-            GUI.color = new Color(1f, 0.95f, 0.9f, alpha);
-            float crossSize = size * 0.55f;
-            float crossThickness = Mathf.Max(2f, size * 0.12f);
-            var hRect = new Rect(guiX - crossSize * 0.5f, guiY - crossThickness * 0.5f, crossSize, crossThickness);
-            var vRect = new Rect(guiX - crossThickness * 0.5f, guiY - crossSize * 0.5f, crossThickness, crossSize);
-            GUI.DrawTexture(hRect, Texture2D.whiteTexture);
-            GUI.DrawTexture(vRect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            float boxSize = fontSize * 1.15f;
+            GUI.Label(
+                new Rect(guiX - boxSize * 0.5f, guiY - boxSize * 0.5f, boxSize, boxSize),
+                "x",
+                hitXStyle);
         }
 
         static void EnsureStyles()
@@ -117,15 +124,13 @@ namespace MonsterMiner.UI
                 alignment = TextAnchor.MiddleCenter,
                 normal = { textColor = new Color(1f, 0.82f, 0.25f) }
             };
-        }
 
-        static Texture2D GetIndicatorTexture()
-        {
-            if (indicatorTexture != null)
-                return indicatorTexture;
-
-            indicatorTexture = Texture2D.whiteTexture;
-            return indicatorTexture;
+            hitXStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
+            };
         }
     }
 }

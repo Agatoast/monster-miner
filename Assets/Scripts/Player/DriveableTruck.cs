@@ -17,7 +17,7 @@ namespace MonsterMiner.Player
         const float DismountSpeedThreshold = 1.75f;
         const float CreatureHitMinSpeedMph = 4f;
         const float RockHitDamage = 10f;
-        const float RockHitShakeDuration = 0.45f;
+        const float RockHitShakeDuration = 1f;
         const float RockHitShakeIntensity = 0.42f;
         const float RockHitCooldownSeconds = 0.6f;
 
@@ -156,8 +156,20 @@ namespace MonsterMiner.Player
 
         public void ClearDriver(PlayerVehicleMount mount)
         {
-            if (driver == mount)
-                driver = null;
+            if (driver != mount)
+                return;
+
+            driver = null;
+            StopForDismount();
+        }
+
+        public void StopForDismount()
+        {
+            if (rb == null)
+                return;
+
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
         }
 
         public void SetCargoOccupant(PlayerVehicleMount mount)
@@ -179,7 +191,10 @@ namespace MonsterMiner.Player
             if (HasDriver && seat != null)
                 DriveWithInput();
             else
+            {
+                StopForDismount();
                 StickToPlainsGround();
+            }
 
             if (HasDriver)
                 ScanTruckObstacleHits();
@@ -268,6 +283,7 @@ namespace MonsterMiner.Player
                     QueryTriggerInteraction.Ignore)
                 && TruckObstacleUtility.TryGetRock(hit.collider, out _))
             {
+                TryHitRock(velocity);
                 return Vector3.zero;
             }
 
@@ -425,9 +441,11 @@ namespace MonsterMiner.Player
             }
         }
 
-        void TryHitRock()
+        void TryHitRock(Vector3? impactVelocity = null)
         {
-            if (!IsMovingFastEnoughToHit())
+            Vector3 velocity = impactVelocity ?? (rb != null ? rb.linearVelocity : Vector3.zero);
+            float minSpeed = WorldScale.MilesPerHour(CreatureHitMinSpeedMph);
+            if (velocity.sqrMagnitude < minSpeed * minSpeed)
                 return;
 
             if (Time.time - lastRockHitTime < RockHitCooldownSeconds)
@@ -437,7 +455,7 @@ namespace MonsterMiner.Player
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
 
-            GameContext.Instance?.Hud?.ShowCenterMessage("Don't Hit Rocks!", 0.22f);
+            GameContext.Instance?.Hud?.ShowCenterMessage("You hit a rock!", 0.22f);
             DamageOccupants(RockHitDamage);
             ShakeOccupants();
         }
