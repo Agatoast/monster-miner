@@ -13,6 +13,8 @@ namespace MonsterMiner.Economy
         bool configuredVisualOffset;
 
         public bool IsJarlLandShop { get; set; }
+        public bool IsQuarry3Shop { get; set; }
+        public bool IsQuarry4Shop { get; set; }
 
         public void Initialize(ShopManager manager)
         {

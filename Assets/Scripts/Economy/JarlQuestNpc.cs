@@ -52,17 +52,9 @@ namespace MonsterMiner.Economy
             if (HasJormungandrSkull(ctx))
             {
                 var skull = ctx.Database?.jormungandrSkullItem;
-                var compass = ctx.Database?.magicCompassItem;
-                if (skull == null || compass == null || !ctx.Inventory.TryRemove(skull, 1))
+                if (skull == null || !ctx.Inventory.TryRemove(skull, 1))
                 {
                     ctx.Hud?.ShowMessage("You need the skull of Jörmungandr.");
-                    return;
-                }
-
-                if (!ctx.Inventory.TryAdd(compass, 1))
-                {
-                    ctx.Inventory.TryAdd(skull, 1);
-                    ctx.Hud?.ShowMessage("Make room in your inventory for the Magic Compass.");
                     return;
                 }
 

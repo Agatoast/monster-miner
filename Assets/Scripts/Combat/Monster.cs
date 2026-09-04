@@ -115,6 +115,9 @@ namespace MonsterMiner.Combat
             if (def.visualPrefabResourcePath == "Models/Creatures/taipan")
                 return TaipanVisualFactory.CreateMonster(position, def.scale, def.displayName);
 
+            if (def.visualPrefabResourcePath == "Models/Creatures/mara")
+                return MaraVisualFactory.CreateMonster(position, def.scale, def.displayName);
+
             var prefab = Resources.Load<GameObject>(def.visualPrefabResourcePath);
             if (prefab == null)
                 return null;
@@ -164,7 +167,18 @@ namespace MonsterMiner.Combat
                 return;
             }
 
-            Vector3 next = (rb != null ? rb.position : transform.position) + worldDelta;
+            Vector3 current = rb != null ? rb.position : transform.position;
+            Vector3 next = current + worldDelta;
+            if (worldDelta.sqrMagnitude > 0.0001f)
+            {
+                next = PlainsMovementCollision.ResolvePosition(
+                    transform,
+                    bodyCollider,
+                    rb,
+                    current,
+                    worldDelta);
+            }
+
             AlignToGround(next);
         }
 

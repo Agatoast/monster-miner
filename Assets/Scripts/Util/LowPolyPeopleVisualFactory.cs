@@ -7,6 +7,11 @@ namespace MonsterMiner.Util
     {
         const string NormalManResourcePath = "Models/People/normal_man";
         const string StrongManResourcePath = "Models/People/strong_man_a";
+        const string SamuraiResourcePath = "Models/People/Samurai_v2";
+        const string AshigaruResourcePath = "Models/People/ashigaru_v2";
+        const string StrongWomanResourcePath = "Models/People/strong_woman_a";
+        const float Quarry3ShopkeeperScale = 1.1f;
+        const float Quarry3QuestNpcScale = 1.2f;
 
         public static GameObject CreateShopkeeper(Transform parent, Vector3 localPosition, Quaternion localRotation, float floorWorldY)
         {
@@ -24,6 +29,42 @@ namespace MonsterMiner.Util
             return CreateShopPerson(
                 StrongManResourcePath,
                 "JarlAssistant",
+                parent,
+                localPosition,
+                localRotation,
+                floorWorldY);
+        }
+
+        public static GameObject CreateQuarry3Shopkeeper(
+            Transform parent,
+            Vector3 localPosition,
+            Quaternion localRotation,
+            float floorWorldY)
+        {
+            var shopkeeper = CreateShopPerson(
+                AshigaruResourcePath,
+                "Quarry3Shopkeeper",
+                parent,
+                localPosition,
+                localRotation,
+                floorWorldY);
+            if (shopkeeper == null)
+                return null;
+
+            shopkeeper.transform.localScale *= Quarry3ShopkeeperScale;
+            FloorAnchor.SnapBottomToFloor(shopkeeper, floorWorldY);
+            return shopkeeper;
+        }
+
+        public static GameObject CreateQuarry4Shopkeeper(
+            Transform parent,
+            Vector3 localPosition,
+            Quaternion localRotation,
+            float floorWorldY)
+        {
+            return CreateShopPerson(
+                StrongWomanResourcePath,
+                "Quarry4Shopkeeper",
                 parent,
                 localPosition,
                 localRotation,
@@ -81,13 +122,23 @@ namespace MonsterMiner.Util
             Quaternion localRotation,
             float floorWorldY)
         {
-            return CreateQuestNpc<Quarry3QuestNpc>(
-                NormalManResourcePath,
-                "Quarry3Guide",
+            var character = CreateQuestNpc<Quarry3QuestNpc>(
+                SamuraiResourcePath,
+                Quarry3QuestNpc.DaimyoCharacterName.Replace("\n", " "),
                 parent,
                 localPosition,
                 localRotation,
                 floorWorldY);
+            if (character == null)
+                return null;
+
+            character.transform.localScale *= Quarry3QuestNpcScale;
+            FloorAnchor.SnapBottomToFloor(character, floorWorldY);
+            var collider = character.GetComponent<BoxCollider>();
+            if (collider != null)
+                FitBoxColliderToCharacterBody(character, collider);
+
+            return character;
         }
 
         public static GameObject CreateWarrensonNpc(

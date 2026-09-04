@@ -19,7 +19,13 @@ namespace MonsterMiner.World
         public const float LandQuarry2BeachApproachSpawnSouthOfSandFeet = 32f;
         public const float LandQuarry2BeachApproachSpawnWestOfBeachCenterFeet = 12f;
         public const bool SpawnPlayerOnIslandForTesting = false;
-        public const bool SpawnPlayerAtJarlLandShopForTesting = true;
+        public const bool SpawnPlayerAtJarlLandShopForTesting = false;
+        public const bool SpawnPlayerAtQuarry3ForTesting = false;
+        public const bool SpawnPlayerAtQuarry4ForTesting = true;
+        public const float Quarry3PlayerSpawnInFrontOfGuideFeet = 8f;
+        public const float Quarry4PlayerSpawnOffsetFromCenterFeet = 8f;
+        public const float Quarry3ShopNorthOfGuideFeet = 30f;
+        public const float Quarry3ShopWestOfGuideFeet = 50f;
         public const float IslandPlayerSpawnOffsetFromCenterFeet = 30f;
         public const float JarlLandShopFrontSpawnFeet = 10f;
         public const string JarlLandDisplayName = "Jarl Land";
@@ -29,6 +35,12 @@ namespace MonsterMiner.World
         public const int LandQuarry3Index = 3;
         public const int LandQuarry4Index = 4;
         public const int LandQuarry5Index = 5;
+
+        /// <summary>Override when Quarry 4 / Orin site is placed; zero uses east-of-Q3 placeholder.</summary>
+        public static Vector2 MapOrinLocalXZ;
+
+        /// <summary>Override when Dragon quest site is placed; zero uses east-of-Q4 placeholder.</summary>
+        public static Vector2 MapDragonLocalXZ;
 
         public readonly struct MapEdgeMarker
         {
@@ -63,29 +75,29 @@ namespace MonsterMiner.World
                 _ => Vector2.zero),
             new MapEdgeMarker(
                 "Truck",
-                Color.blue,
+                new Color(0.45f, 0.65f, 1f),
                 ctx => ctx?.PlayerTruck != null,
                 GetTruckLocal),
             new MapEdgeMarker(
                 JarlLandDisplayName,
                 new Color(0.2f, 0.85f, 0.3f),
-                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2,
+                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.JarlSkullQuestComplete,
                 _ => GetLandQuarry2Center()),
             new MapEdgeMarker(
-                "Quarry 3",
-                new Color(1f, 0.55f, 0.12f),
-                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.HasLandQuarry3,
-                _ => GetLandQuarryCenter(LandQuarry3Index)),
+                "Shogun",
+                Color.blue,
+                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.ArtilleryTrialWon,
+                _ => GetLandQuarry3Center()),
             new MapEdgeMarker(
-                "Quarry 4",
-                new Color(0.62f, 0.28f, 0.82f),
-                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.HasLandQuarry4,
-                _ => GetLandQuarryCenter(LandQuarry4Index)),
+                "Orin",
+                Color.yellow,
+                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.ArtilleryTrialWon,
+                _ => GetOrinMapTargetLocal()),
             new MapEdgeMarker(
-                "Quarry 5",
+                "Dragon",
                 Color.white,
-                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.HasLandQuarry5,
-                _ => GetLandQuarryCenter(LandQuarry5Index)),
+                ctx => ctx?.CaveProgression != null && ctx.CaveProgression.Quest5Complete,
+                _ => GetDragonMapTargetLocal()),
         };
 
         public static Vector2 GetLandQuarry2Center() => new Vector2(0f, WorldScale.Miles(1f));
@@ -96,12 +108,39 @@ namespace MonsterMiner.World
             return new Vector2(quarry2.x + WorldScale.Miles(1f), quarry2.y);
         }
 
+        public static Vector2 GetLandQuarry4Center()
+        {
+            // One mile east of plateau, one mile south of Quarry 3.
+            return new Vector2(WorldScale.Miles(1f), 0f);
+        }
+
+        public static Vector2 GetOrinMapTargetLocal()
+        {
+            if (MapOrinLocalXZ.sqrMagnitude > 0.01f)
+                return MapOrinLocalXZ;
+
+            return GetLandQuarry4Center();
+        }
+
+        public static Vector2 GetDragonMapTargetLocal()
+        {
+            if (MapDragonLocalXZ.sqrMagnitude > 0.01f)
+                return MapDragonLocalXZ;
+
+            var quarry4 = GetLandQuarry4Center();
+            return new Vector2(quarry4.x + WorldScale.Miles(1f), quarry4.y);
+        }
+
         public static Vector2 GetLandQuarryCenter(int quarryIndex)
         {
             if (quarryIndex == LandQuarry2Index)
                 return GetLandQuarry2Center();
             if (quarryIndex == LandQuarry3Index)
                 return GetLandQuarry3Center();
+            if (quarryIndex == LandQuarry4Index)
+                return GetLandQuarry4Center();
+            if (quarryIndex == LandQuarry5Index)
+                return GetDragonMapTargetLocal();
 
             return Vector2.zero;
         }
@@ -112,16 +151,95 @@ namespace MonsterMiner.World
             if (progression == null || !progression.HasLandQuarry2)
                 return false;
 
-            var center = GetLandQuarry2Center();
             return LandQuarry2Boundary.ContainsLocal(localX, localZ);
+        }
+
+        public static bool IsLandQuarry3Local(float localX, float localZ)
+        {
+            var progression = GameContext.Instance?.CaveProgression;
+            if (progression == null || !progression.HasLandQuarry3)
+                return false;
+
+            return LandQuarry3Boundary.ContainsLocal(localX, localZ);
+        }
+
+        public static bool IsLandQuarry4Local(float localX, float localZ)
+        {
+            var progression = GameContext.Instance?.CaveProgression;
+            if (progression == null || !progression.HasLandQuarry4)
+                return false;
+
+            return LandQuarry4Boundary.ContainsLocal(localX, localZ);
+        }
+
+        public static Vector3 ResolveQuarry3ShopAnchorLocal()
+        {
+            return new Vector3(
+                -WorldScale.Feet(Quarry3ShopWestOfGuideFeet),
+                0f,
+                WorldScale.Feet(Quarry3ShopNorthOfGuideFeet));
+        }
+
+        public static Vector3 ResolveQuarry3PlayerSpawnLocal()
+        {
+            return new Vector3(0f, 0f, -WorldScale.Feet(Quarry3PlayerSpawnInFrontOfGuideFeet));
+        }
+
+        public static Vector3 ResolveQuarry4PlayerSpawnWorld(CavernBounds bounds)
+        {
+            if (bounds == null)
+                return Vector3.zero;
+
+            var center = GetLandQuarry4Center();
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(center.x, center.y, plainsBaseY);
+            var local = new Vector3(
+                center.x,
+                groundY,
+                center.y + WorldScale.Feet(Quarry4PlayerSpawnOffsetFromCenterFeet));
+            return PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                bounds.transform.TransformPoint(local),
+                WorldScale.CharacterHeightUnits * 0.5f);
         }
 
         public static Vector3 ResolveHallFrontSpawnWorld(CavernBounds bounds)
         {
-            if (!SpawnPlayerOnIslandForTesting && PlayerSpawnPersistence.HasSavedLandSpawn)
+            if (!SpawnPlayerOnIslandForTesting
+                && !SpawnPlayerAtQuarry3ForTesting
+                && !SpawnPlayerAtQuarry4ForTesting
+                && PlayerSpawnPersistence.HasSavedLandSpawn)
                 return PlayerSpawnPersistence.LoadSavedLandSpawn();
 
             return ResolvePlayerSpawnWorld(bounds);
+        }
+
+        public static Vector3 ResolveQuarry3PlayerSpawnWorld(CavernBounds bounds, Transform guide = null)
+        {
+            if (bounds == null)
+                return Vector3.zero;
+
+            if (guide != null)
+            {
+                Vector3 spawn = guide.position
+                    + guide.forward * WorldScale.Feet(Quarry3PlayerSpawnInFrontOfGuideFeet);
+                return PlainsGroundSupport.SnapWorldPointToPlains(
+                    bounds,
+                    spawn,
+                    WorldScale.CharacterHeightUnits * 0.5f);
+            }
+
+            var center = GetLandQuarry3Center();
+            float plainsBaseY = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(center.x, center.y, plainsBaseY);
+            var local = new Vector3(
+                center.x,
+                groundY,
+                center.y - WorldScale.Feet(Quarry3PlayerSpawnInFrontOfGuideFeet));
+            return PlainsGroundSupport.SnapWorldPointToPlains(
+                bounds,
+                bounds.transform.TransformPoint(local),
+                WorldScale.CharacterHeightUnits * 0.5f);
         }
 
         public static Vector3 ResolvePlayerSpawnWorld(CavernBounds bounds)
@@ -129,8 +247,17 @@ namespace MonsterMiner.World
             if (bounds == null)
                 return Vector3.zero;
 
-            if (!SpawnPlayerOnIslandForTesting && PlayerSpawnPersistence.HasSavedLandSpawn)
+            if (!SpawnPlayerOnIslandForTesting
+                && !SpawnPlayerAtQuarry3ForTesting
+                && !SpawnPlayerAtQuarry4ForTesting
+                && PlayerSpawnPersistence.HasSavedLandSpawn)
                 return PlayerSpawnPersistence.LoadSavedLandSpawn();
+
+            if (SpawnPlayerAtQuarry4ForTesting)
+                return ResolveQuarry4PlayerSpawnWorld(bounds);
+
+            if (SpawnPlayerAtQuarry3ForTesting)
+                return ResolveQuarry3PlayerSpawnWorld(bounds);
 
             Vector3 worldPoint;
             if (SpawnPlayerAtJarlLandShopForTesting)

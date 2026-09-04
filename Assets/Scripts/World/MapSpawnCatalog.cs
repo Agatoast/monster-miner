@@ -9,6 +9,8 @@ namespace MonsterMiner.World
         public const string Cave1MapId = "cave_1";
         public const string Cave2MapId = "cave_2";
         public const string JarlLandMapId = "jarl_land";
+        public const string LandQuarry3MapId = "land_quarry_3";
+        public const string LandQuarry4MapId = "land_quarry_4";
         public const string WildernessMapId = "wilderness";
 
         static readonly string[] Cave1Creatures =
@@ -35,6 +37,12 @@ namespace MonsterMiner.World
             if (bounds.IsInCave2ZoneLocal(local.x, local.z))
                 return Cave2MapId;
 
+            if (QuarryCatalog.IsLandQuarry3Local(local.x, local.z))
+                return LandQuarry3MapId;
+
+            if (QuarryCatalog.IsLandQuarry4Local(local.x, local.z))
+                return LandQuarry4MapId;
+
             if (QuarryCatalog.IsLandQuarry2Local(local.x, local.z))
                 return JarlLandMapId;
 
@@ -46,6 +54,12 @@ namespace MonsterMiner.World
 
         public static IReadOnlyList<string> GetCreaturesForMap(string mapId)
         {
+            if (mapId == LandQuarry3MapId)
+                return GetLandQuarry3Creatures();
+
+            if (mapId == LandQuarry4MapId)
+                return GetLandQuarry4Creatures();
+
             if (mapId == JarlLandMapId)
                 return GetJarlLandCreatures();
 
@@ -56,6 +70,24 @@ namespace MonsterMiner.World
                 return Cave2Creatures;
 
             return Cave1Creatures;
+        }
+
+        static IReadOnlyList<string> GetLandQuarry3Creatures()
+        {
+            var quarry3 = Quarry3CreatureCatalog.GetMonsterIds();
+            if (quarry3.Length > 0)
+                return quarry3;
+
+            return GetJarlLandCreatures();
+        }
+
+        static IReadOnlyList<string> GetLandQuarry4Creatures()
+        {
+            var quarry4 = Quarry4CreatureCatalog.GetMonsterIds();
+            if (quarry4.Length > 0)
+                return quarry4;
+
+            return GetJarlLandCreatures();
         }
 
         static IReadOnlyList<string> GetJarlLandCreatures()

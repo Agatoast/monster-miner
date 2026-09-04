@@ -50,7 +50,7 @@ namespace MonsterMiner.Data
             new("hilder", "Hilder", 7, 14, 76f, 12f, bodyColor: new Color(0.38f, 0.58f, 0.72f)),
             new("thursar", "Thursar", 8, 16, 91f, 13f, bodyColor: new Color(0.62f, 0.58f, 0.52f)),
             new("ironwood_wolf", "Ironwood Wolf", 8, 16, 91f, 13f, bodyColor: new Color(0.35f, 0.32f, 0.28f)),
-            new("mara", "Mara", 9, 18, 106f, 14f, bodyColor: new Color(0.42f, 0.28f, 0.48f)),
+            new("mara", "Mara", 9, 18, 106f, 14f, bodyColor: new Color(0.42f, 0.28f, 0.48f), prefabResourcePath: "Models/Creatures/mara"),
             new("lesser_sea_monster", "Lesser Sea Monster", 9, 18, 106f, 14f, bodyColor: new Color(0.28f, 0.52f, 0.58f)),
             new("ormar", "Ormar", 10, 24, 121f, 15f, bodyColor: new Color(0.72f, 0.55f, 0.32f)),
         };

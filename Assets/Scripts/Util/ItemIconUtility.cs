@@ -11,7 +11,17 @@ namespace MonsterMiner.Util
 
         public static Texture2D GetIcon(ItemDefinition item)
         {
-            if (item == null || string.IsNullOrEmpty(item.iconResourcePath))
+            if (item == null)
+                return null;
+
+            if (InventorySystem.IsMonsterMeat(item))
+            {
+                var meatIcon = MeatVisualFactory.GetDropTileIcon(item);
+                if (meatIcon != null)
+                    return meatIcon;
+            }
+
+            if (string.IsNullOrEmpty(item.iconResourcePath))
                 return null;
 
             if (InventorySystem.IsGrenadeItem(item))
@@ -75,6 +85,139 @@ namespace MonsterMiner.Util
             readable.Apply(false, false);
             processedIconCache[cacheKey] = readable;
             return readable;
+        }
+
+        public static Texture2D LoadMiningGloveIcon(
+            string resourcePath = "Textures/Inventory/Glove",
+            float darkThreshold = 0.12f)
+        {
+            string cacheKey = $"{resourcePath}|mining_glove_opaque|{darkThreshold:F3}";
+            if (processedIconCache.TryGetValue(cacheKey, out var cached) && cached != null)
+                return cached;
+
+            var source = Resources.Load<Texture2D>(resourcePath);
+            if (source == null)
+                return null;
+
+            var readable = CreateReadableCopy(source);
+            if (readable == null)
+            {
+                processedIconCache[cacheKey] = source;
+                return source;
+            }
+
+            int width = readable.width;
+            int height = readable.height;
+            var pixels = readable.GetPixels();
+            var gloveMask = BuildDilatedGloveMask(pixels, width, height, darkThreshold, dilateRadius: 2);
+            Color fillColor = ComputeAverageGloveColor(pixels, gloveMask, darkThreshold);
+
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                if (!gloveMask[i])
+                {
+                    pixels[i] = new Color(0f, 0f, 0f, 0f);
+                    continue;
+                }
+
+                Color pixel = pixels[i];
+                if (pixel.a < 0.999f || GetLuminance(pixel) <= darkThreshold)
+                    pixels[i] = new Color(fillColor.r, fillColor.g, fillColor.b, 1f);
+                else
+                    pixels[i] = new Color(pixel.r, pixel.g, pixel.b, 1f);
+            }
+
+            readable.SetPixels(pixels);
+            readable.Apply(false, false);
+            processedIconCache[cacheKey] = readable;
+            return readable;
+        }
+
+        static bool[] BuildDilatedGloveMask(Color[] pixels, int width, int height, float darkThreshold, int dilateRadius)
+        {
+            int length = pixels.Length;
+            var seedMask = new bool[length];
+            for (int i = 0; i < length; i++)
+            {
+                Color pixel = pixels[i];
+                seedMask[i] = pixel.a > 0.01f && GetLuminance(pixel) > darkThreshold;
+            }
+
+            var dilatedMask = new bool[length];
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int index = y * width + x;
+                    if (!HasGloveSeedNear(pixels, seedMask, width, height, x, y, darkThreshold, dilateRadius))
+                        continue;
+
+                    dilatedMask[index] = true;
+                }
+            }
+
+            return dilatedMask;
+        }
+
+        static bool HasGloveSeedNear(
+            Color[] pixels,
+            bool[] seedMask,
+            int width,
+            int height,
+            int centerX,
+            int centerY,
+            float darkThreshold,
+            int radius)
+        {
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    int x = centerX + dx;
+                    int y = centerY + dy;
+                    if (x < 0 || y < 0 || x >= width || y >= height)
+                        continue;
+
+                    int index = y * width + x;
+                    if (seedMask[index])
+                        return true;
+
+                    Color pixel = pixels[index];
+                    if (pixel.a > 0.01f && GetLuminance(pixel) > darkThreshold * 0.65f)
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        static Color ComputeAverageGloveColor(Color[] pixels, bool[] gloveMask, float darkThreshold)
+        {
+            Vector3 sum = Vector3.zero;
+            int count = 0;
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                if (!gloveMask[i])
+                    continue;
+
+                Color pixel = pixels[i];
+                if (pixel.a <= 0.01f || GetLuminance(pixel) <= darkThreshold)
+                    continue;
+
+                sum += new Vector3(pixel.r, pixel.g, pixel.b);
+                count++;
+            }
+
+            if (count <= 0)
+                return new Color(0.55f, 0.36f, 0.24f, 1f);
+
+            sum /= count;
+            return new Color(sum.x, sum.y, sum.z, 1f);
+        }
+
+        static float GetLuminance(Color color)
+        {
+            return color.r * 0.299f + color.g * 0.587f + color.b * 0.114f;
         }
 
         public static bool TryDrawIcon(Rect rect, ItemDefinition item)

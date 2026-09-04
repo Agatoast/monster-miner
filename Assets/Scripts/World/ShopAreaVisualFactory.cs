@@ -7,7 +7,9 @@ namespace MonsterMiner.World
     {
         None,
         Normal,
-        StrongMan
+        StrongMan,
+        Quarry3Ashigaru,
+        Quarry4StrongWoman
     }
 
     public static class ShopAreaVisualFactory
@@ -27,10 +29,14 @@ namespace MonsterMiner.World
             Quaternion anchorLocalRotation,
             float slotFloorWorldY,
             ShopAreaShopkeeperType shopkeeperType,
-            float shopkeeperFloorWorldY)
+            float shopkeeperFloorWorldY,
+            Quaternion? shopkeeperLocalRotation = null,
+            Quaternion? slotLocalRotation = null)
         {
             const float counterLocalZ = -1.1f;
             const float counterLocalY = 0.6f;
+            var resolvedShopkeeperRotation = shopkeeperLocalRotation ?? Quaternion.Euler(0f, 180f, 0f);
+            var resolvedSlotRotation = slotLocalRotation ?? Quaternion.Euler(0f, 180f, 0f);
 
             var shopRoot = new GameObject("ShopArea").transform;
             shopRoot.SetParent(parent, false);
@@ -49,18 +55,29 @@ namespace MonsterMiner.World
             GameObject shopkeeper = null;
             if (shopkeeperType != ShopAreaShopkeeperType.None)
             {
-                var shopkeeperRotation = Quaternion.Euler(0f, 180f, 0f);
-                shopkeeper = shopkeeperType == ShopAreaShopkeeperType.StrongMan
-                    ? LowPolyPeopleVisualFactory.CreateShopAssistant(
+                shopkeeper = shopkeeperType switch
+                {
+                    ShopAreaShopkeeperType.StrongMan => LowPolyPeopleVisualFactory.CreateShopAssistant(
                         shopRoot,
                         Vector3.zero,
-                        shopkeeperRotation,
+                        resolvedShopkeeperRotation,
+                        shopkeeperFloorWorldY),
+                    ShopAreaShopkeeperType.Quarry3Ashigaru => LowPolyPeopleVisualFactory.CreateQuarry3Shopkeeper(
+                        shopRoot,
+                        Vector3.zero,
+                        resolvedShopkeeperRotation,
+                        shopkeeperFloorWorldY),
+                    ShopAreaShopkeeperType.Quarry4StrongWoman => LowPolyPeopleVisualFactory.CreateQuarry4Shopkeeper(
+                        shopRoot,
+                        Vector3.zero,
+                        resolvedShopkeeperRotation,
+                        shopkeeperFloorWorldY),
+                    _ => LowPolyPeopleVisualFactory.CreateShopkeeper(
+                        shopRoot,
+                        Vector3.zero,
+                        resolvedShopkeeperRotation,
                         shopkeeperFloorWorldY)
-                    : LowPolyPeopleVisualFactory.CreateShopkeeper(
-                        shopRoot,
-                        Vector3.zero,
-                        shopkeeperRotation,
-                        shopkeeperFloorWorldY);
+                };
             }
 
             var board = PrimitiveFactory.CreatePrimitive(
@@ -75,7 +92,7 @@ namespace MonsterMiner.World
             var slotCab = SlotMachineVisualFactory.CreateShopSlotMachine(
                 shopRoot,
                 new Vector3(2.5f, 0f, counterLocalZ),
-                Quaternion.Euler(0f, 180f, 0f),
+                resolvedSlotRotation,
                 slotFloorWorldY);
 
             return new ShopAreaBuild

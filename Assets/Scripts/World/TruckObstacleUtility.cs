@@ -40,7 +40,9 @@ namespace MonsterMiner.World
             if (rock != null)
                 return true;
 
-            Transform root = FindNamedRoot(hit.transform, "PlainsRock_");
+            Transform root = FindNamedRoot(hit.transform, "PlainsRock_")
+                ?? FindNamedRoot(hit.transform, "NatureRock5")
+                ?? FindNamedRoot(hit.transform, "NatureRock5Pair");
             if (root == null)
                 return false;
 

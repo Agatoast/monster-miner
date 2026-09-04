@@ -1,3 +1,4 @@
+using MonsterMiner.Artillery;
 using MonsterMiner.Core;
 using MonsterMiner.Economy;
 using MonsterMiner.Interaction;
@@ -60,6 +61,7 @@ namespace MonsterMiner.UI
             DeathScreenDisplay.HandleInput();
             MinerTurnInPopupDisplay.HandleInput();
             WorldMapDisplay.HandleInput();
+            MainMenuDisplay.HandleInput();
             HudEggHitDisplay.Tick(Time.deltaTime);
             CombatHitFeedbackDisplay.Tick(Time.deltaTime);
 
@@ -83,6 +85,15 @@ namespace MonsterMiner.UI
             var ctx = GameContext.Instance;
             if (ctx == null)
                 return;
+
+            if (ArtillerySession.IsActive)
+                return;
+
+            if (MainMenuDisplay.IsActive)
+            {
+                MainMenuDisplay.Draw();
+                return;
+            }
 
             if (DeathScreenDisplay.IsActive)
             {
@@ -177,6 +188,10 @@ namespace MonsterMiner.UI
                             else if (interactor.CurrentTarget is WarrensonBoatNpc warrenson)
                             {
                                 JarlDialogueDisplay.Draw(warrenson, camera);
+                            }
+                            else if (interactor.CurrentTarget is OrinQuestNpc orin)
+                            {
+                                JarlDialogueDisplay.Draw(orin, camera);
                             }
                             else
                             {

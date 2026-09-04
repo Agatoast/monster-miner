@@ -13,8 +13,12 @@ namespace MonsterMiner.UI
         const int MapTextureSize = 256;
         const float PlayerArrowSize = 32f;
         const float EdgeArrowSize = 14f;
-        const float EdgeLetterInset = 16f;
-        const float EdgeLetterSize = 24f;
+        const float EdgeArrowInset = 8f;
+        const float EdgeLabelInsideArrowOffset = 28f;
+        const float EdgeLetterSize = 48f;
+        const float EdgeLabelCharWidth = 18f;
+        const float EdgeLabelMaxWidth = 192f;
+        const int EdgeLabelFontSize = 22;
         const float LocalViewRadiusFeet = 500f;
         const float MapRebakeMoveFeet = 40f;
 
@@ -123,10 +127,6 @@ namespace MonsterMiner.UI
                 mapSize,
                 mapSize);
 
-            float mapRotation = -GetPlayerFacingMapAngle(ctx);
-            var savedMatrix = GUI.matrix;
-            GUIUtility.RotateAroundPivot(mapRotation, mapRect.center);
-
             GUI.color = Color.white;
             if (mapTexture != null)
                 GUI.DrawTexture(mapRect, mapTexture);
@@ -136,12 +136,10 @@ namespace MonsterMiner.UI
             DrawEdgeMarkers(mapRect, ctx, playerLocal);
             DrawCompass(mapRect);
 
-            GUI.matrix = savedMatrix;
-
             GUI.color = new Color(0.85f, 0.85f, 0.8f);
             GUI.Label(
                 new Rect(panelRect.x + PanelPadding, mapRect.yMax + 11f, panelRect.width - PanelPadding * 2f, 40f),
-                "Yellow arrow is you  ·  Rim letters and arrows point to off-screen sites",
+                "Yellow arrow is you  ·  Rim arrows point off-screen; site names sit just inside each arrow",
                 legendStyle);
 
             GUI.color = new Color(0.75f, 0.75f, 0.75f);
@@ -178,36 +176,33 @@ namespace MonsterMiner.UI
             Vector2 dir = delta.normalized;
             var screenDir = new Vector2(dir.x, -dir.y);
             float half = mapRect.width * 0.5f;
-            float letterRadius = half - EdgeLetterInset;
-            Vector2 letterCenter = mapRect.center + screenDir * letterRadius;
+            float arrowRadius = half - EdgeArrowInset;
+            Vector2 arrowCenter = mapRect.center + screenDir * arrowRadius;
+            Vector2 labelCenter = mapRect.center + screenDir * (arrowRadius - EdgeLabelInsideArrowOffset);
 
-            string letter = GetEdgeLetter(label);
+            string displayLabel = GetEdgeMarkerLabel(label);
             float angle = Vector2.SignedAngle(new Vector2(0f, -1f), screenDir);
+            float labelWidth = Mathf.Clamp(displayLabel.Length * EdgeLabelCharWidth, EdgeLetterSize, EdgeLabelMaxWidth);
 
-            var letterRect = new Rect(
-                letterCenter.x - EdgeLetterSize * 0.5f,
-                letterCenter.y - EdgeLetterSize * 0.5f,
-                EdgeLetterSize,
+            var labelRect = new Rect(
+                labelCenter.x - labelWidth * 0.5f,
+                labelCenter.y - EdgeLetterSize * 0.5f,
+                labelWidth,
                 EdgeLetterSize);
 
+            DrawColoredArrow(arrowCenter, angle, color, EdgeArrowSize);
+
             GUI.color = color;
-            GUI.Label(letterRect, letter, edgeLetterStyle);
-            DrawColoredArrow(letterCenter, angle, color, EdgeArrowSize);
+            GUI.Label(labelRect, displayLabel, edgeLetterStyle);
             GUI.color = Color.white;
         }
 
-        static string GetEdgeLetter(string label)
+        static string GetEdgeMarkerLabel(string label)
         {
             if (string.IsNullOrEmpty(label))
                 return "?";
 
-            if (label.StartsWith("Quarry "))
-            {
-                string number = label.Substring("Quarry ".Length).Trim();
-                return string.IsNullOrEmpty(number) ? "Q" : number;
-            }
-
-            return label.Substring(0, 1).ToUpperInvariant();
+            return label;
         }
 
         static void DrawPlayerMarker(Rect mapRect, GameContext ctx)
@@ -456,7 +451,7 @@ namespace MonsterMiner.UI
             edgeLetterStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 16,
+                fontSize = EdgeLabelFontSize,
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };

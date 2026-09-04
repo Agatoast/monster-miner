@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using MonsterMiner.Data;
 using MonsterMiner.World;
 using UnityEngine;
@@ -171,11 +171,11 @@ namespace MonsterMiner.Core
             db.glovesPurple = MakeGlove("mining_gloves_purple", "Purple Mining Gloves", 4, new Color(0.65f, 0.25f, 0.95f));
             db.glovesGold = MakeGlove("mining_gloves_gold", "Gold Mining Gloves", 5, new Color(1f, 0.82f, 0.15f));
 
-            var rabbitMeat = MakeMeat("rabbit_meat", 3, "Textures/Creatures/Meat/rabbit");
-            var iguanaMeat = MakeMeat("iguana_meat", 3, "Textures/Creatures/Meat/iguana");
-            var caveLizardMeat = MakeMeat("cave_lizard_meat", 5, "Textures/Creatures/Meat/cave_lizard");
-            var gremlinMeat = MakeMeat("gremlin_meat", 7, "Textures/Creatures/Meat/gremlin");
-            var salamanderMeat = MakeMeat("salamander_meat", 9, "Textures/Creatures/Meat/salamander");
+            var rabbitMeat = MakeMeat("rabbit_meat", "Rabbit", 3, "Textures/Creatures/Meat/rabbit");
+            var iguanaMeat = MakeMeat("iguana_meat", "Iguana", 3, "Textures/Creatures/Meat/iguana");
+            var caveLizardMeat = MakeMeat("cave_lizard_meat", "Cave Lizard", 5, "Textures/Creatures/Meat/cave_lizard");
+            var gremlinMeat = MakeMeat("gremlin_meat", "Gremlin", 7, "Textures/Creatures/Meat/gremlin");
+            var salamanderMeat = MakeMeat("salamander_meat", "Salamander", 9, "Textures/Creatures/Meat/salamander");
             var core = MakeItem("rare_core", "Rare Core", ItemCategory.Drop, 12, new Color(0.3f, 0.9f, 1f), true);
             core.isEdible = true;
             var caveKey = MakeItem("cave_key", "Cave Key", ItemCategory.Key, 25, new Color(1f, 0.75f, 0.1f), false);
@@ -287,6 +287,7 @@ namespace MonsterMiner.Core
                 {
                     var meat = MakeMeat(
                         $"{spec.MonsterId}_meat",
+                        spec.DisplayName,
                         spec.MeatSellPrice,
                         $"Textures/Creatures/Meat/{spec.MonsterId}");
                     var finder = MakeFinder(
@@ -366,9 +367,9 @@ namespace MonsterMiner.Core
                 return item;
             }
 
-            static ItemDefinition MakeMeat(string id, int sell, string iconPath)
+            static ItemDefinition MakeMeat(string id, string creatureDisplayName, int sell, string iconPath)
             {
-                var meat = MakeItem(id, "Monster Meat", ItemCategory.Drop, sell, new Color(0.85f, 0.25f, 0.2f), true);
+                var meat = MakeItem(id, $"{creatureDisplayName} meat", ItemCategory.Drop, sell, new Color(0.85f, 0.25f, 0.2f), true);
                 meat.isEdible = true;
                 meat.iconResourcePath = iconPath;
                 return meat;

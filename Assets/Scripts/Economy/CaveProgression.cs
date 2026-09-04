@@ -25,6 +25,12 @@ namespace MonsterMiner.Economy
         public bool HasLandQuarry5 { get; private set; }
         public bool JarlSkullQuestComplete { get; private set; }
         public bool Quarry3CompassReturned { get; private set; }
+        public bool HasHeardSamuraiIntro { get; private set; }
+        public bool ArtilleryTrialWon { get; private set; }
+        public bool ArtilleryTrialLost { get; private set; }
+        public bool Quest5Complete { get; private set; }
+
+        public bool HasMagicCompass => JarlSkullQuestComplete && !Quarry3CompassReturned;
         public bool HasBoatRental { get; private set; }
         public bool CanEquipMinerWings =>
             HasMinerWingsPermission && !MinerWingsConsumed;
@@ -89,6 +95,18 @@ namespace MonsterMiner.Economy
             HasLandQuarry3 = true;
             var builder = FindFirstObjectByType<CavernBuilder>();
             builder?.BuildLandQuarry3(GameContext.Instance?.CavernBounds);
+            GameContext.Instance?.SpawnManager?.EnsureLandQuarry3EggsSpawned();
+        }
+
+        public void UnlockLandQuarry4()
+        {
+            if (HasLandQuarry4)
+                return;
+
+            HasLandQuarry4 = true;
+            var builder = FindFirstObjectByType<CavernBuilder>();
+            builder?.BuildLandQuarry4(GameContext.Instance?.CavernBounds);
+            GameContext.Instance?.SpawnManager?.EnsureLandQuarry4EggsSpawned();
         }
 
         public void CompleteQuarry3CompassReturn()
@@ -96,9 +114,39 @@ namespace MonsterMiner.Economy
             Quarry3CompassReturned = true;
         }
 
+        public void MarkSamuraiIntroHeard()
+        {
+            HasHeardSamuraiIntro = true;
+        }
+
+        public void CompleteArtilleryTrial()
+        {
+            ArtilleryTrialWon = true;
+            ArtilleryTrialLost = false;
+        }
+
+        public void MarkArtilleryTrialLost()
+        {
+            if (ArtilleryTrialWon)
+                return;
+
+            ArtilleryTrialLost = true;
+        }
+
+        public void ClearArtilleryTrialLost()
+        {
+            ArtilleryTrialLost = false;
+        }
+
         public void CompleteBoatRental()
         {
             HasBoatRental = true;
+        }
+
+        public void CompleteQuest5()
+        {
+            Quest5Complete = true;
+            HasLandQuarry5 = true;
         }
 
         public void BeginBlastSequence()

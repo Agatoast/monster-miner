@@ -9,6 +9,7 @@ namespace MonsterMiner.UI
         const float PanelPadding = 16f;
         const float MaxPromptWidth = 420f;
         const float MinPromptWidth = 180f;
+        const float Quarry3PromptWidth = 320f;
         const float HeadGapPixels = 8f;
         static readonly Color PanelBackground = new Color(0f, 0f, 0f, 0.88f);
 
@@ -27,7 +28,7 @@ namespace MonsterMiner.UI
             if (guide == null || camera == null)
                 return;
 
-            DrawNamePlaque(guide, camera, InteractPromptDisplay.FormatPrompt(guide.GetPrompt()));
+            DrawNamePlaque(guide, camera, guide.GetPrompt(), Quarry3PromptWidth);
         }
 
         public static void Draw(WarrensonBoatNpc warrenson, Camera camera)
@@ -38,7 +39,15 @@ namespace MonsterMiner.UI
             DrawNamePlaque(warrenson, camera, InteractPromptDisplay.FormatPrompt(warrenson.GetPrompt()));
         }
 
-        static void DrawNamePlaque(IInteractPromptBounds npc, Camera camera, string prompt)
+        public static void Draw(OrinQuestNpc orin, Camera camera)
+        {
+            if (orin == null || camera == null)
+                return;
+
+            DrawNamePlaque(orin, camera, InteractPromptDisplay.FormatPrompt(orin.GetPrompt()));
+        }
+
+        static void DrawNamePlaque(IInteractPromptBounds npc, Camera camera, string prompt, float? fixedPromptWidth = null)
         {
             if (npc == null || camera == null || string.IsNullOrEmpty(prompt))
                 return;
@@ -49,7 +58,9 @@ namespace MonsterMiner.UI
             EnsureStyles();
 
             var content = new GUIContent(prompt);
-            float textWidth = Mathf.Min(MaxPromptWidth, Mathf.Max(MinPromptWidth, headBounds.width)) - PanelPadding * 2f;
+            float textWidth = fixedPromptWidth.HasValue
+                ? fixedPromptWidth.Value - PanelPadding * 2f
+                : Mathf.Min(MaxPromptWidth, Mathf.Max(MinPromptWidth, headBounds.width)) - PanelPadding * 2f;
             float textHeight = bodyStyle.CalcHeight(content, textWidth);
             float panelWidth = textWidth + PanelPadding * 2f;
             float panelHeight = textHeight + PanelPadding * 2f;

@@ -10,6 +10,12 @@ namespace MonsterMiner.Util
             if (bounds == null)
                 return 0f;
 
+            if (LandQuarry3Boundary.ContainsLocal(localX, localZ))
+                return SampleQuarryBowlWorldY(bounds, QuarryCatalog.GetLandQuarry3Center());
+
+            if (LandQuarry4Boundary.ContainsLocal(localX, localZ))
+                return SampleQuarryBowlWorldY(bounds, QuarryCatalog.GetLandQuarry4Center());
+
             if (LandQuarry2Boundary.IsSnowGroundLocal(localX, localZ))
             {
                 float plainsBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
@@ -48,6 +54,13 @@ namespace MonsterMiner.Util
             float bottomLocalY = PlainsWorldBuilder.SamplePlainsLocalY(localX, localZ, lowerBase);
             float localY = Mathf.Lerp(topLocalY, bottomLocalY, descentT);
             return bounds.transform.TransformPoint(new Vector3(localX, localY, localZ)).y;
+        }
+
+        static float SampleQuarryBowlWorldY(CavernBounds bounds, Vector2 center)
+        {
+            float plainsBase = PlainsWorldBuilder.GetPlainsGroundBaseY(PlainsBiomeVisualFactory.PlainsSurfaceLocalY);
+            float groundY = PlainsWorldBuilder.SamplePlainsLocalY(center.x, center.y, plainsBase);
+            return bounds.transform.TransformPoint(new Vector3(center.x, groundY, center.y)).y;
         }
     }
 }

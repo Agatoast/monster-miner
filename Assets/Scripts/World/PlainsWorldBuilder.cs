@@ -108,6 +108,12 @@ namespace MonsterMiner.World
             if (LakeCatalog.IsLakeLocal(localX, localZ))
                 return true;
 
+            if (LandQuarry3Boundary.ContainsLocal(localX, localZ))
+                return true;
+
+            if (LandQuarry4Boundary.ContainsLocal(localX, localZ))
+                return true;
+
             return false;
         }
 

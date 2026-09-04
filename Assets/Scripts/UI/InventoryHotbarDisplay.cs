@@ -352,7 +352,10 @@ namespace MonsterMiner.UI
 
             string creatureName = ResolveCreatureDisplayName(creatureId);
             if (string.IsNullOrEmpty(creatureName))
-                creatureName = "Monster";
+                creatureName = ResolveCreatureNameFromMeatDisplayName(item.displayName);
+
+            if (string.IsNullOrEmpty(creatureName))
+                return false;
 
             int spaceIndex = creatureName.IndexOf(' ');
             if (spaceIndex > 0)
@@ -384,6 +387,18 @@ namespace MonsterMiner.UI
             }
 
             return creatureTypeId;
+        }
+
+        static string ResolveCreatureNameFromMeatDisplayName(string displayName)
+        {
+            if (string.IsNullOrEmpty(displayName))
+                return string.Empty;
+
+            const string suffix = " meat";
+            if (displayName.EndsWith(suffix, System.StringComparison.OrdinalIgnoreCase))
+                return displayName.Substring(0, displayName.Length - suffix.Length);
+
+            return displayName;
         }
 
         static void DrawFinderNameLabel(Rect rect, string text)
@@ -492,9 +507,7 @@ namespace MonsterMiner.UI
         {
             if (gloveIcon == null)
             {
-                gloveIcon = ItemIconUtility.LoadIconWithTransparentBackground(
-                    "Textures/Inventory/Glove",
-                    ItemIconUtility.IconBackgroundKeyMode.Black);
+                gloveIcon = ItemIconUtility.LoadMiningGloveIcon("Textures/Inventory/Glove");
             }
 
             return gloveIcon;

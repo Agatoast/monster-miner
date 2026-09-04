@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using MonsterMiner.Data;
 using MonsterMiner.World;
@@ -601,8 +601,7 @@ namespace MonsterMiner.Inventory
 
         public bool HasMagicCompass()
         {
-            var compass = Core.GameContext.Instance?.Database?.magicCompassItem;
-            return compass != null && ContainsItem(compass);
+            return Core.GameContext.Instance?.CaveProgression?.HasMagicCompass == true;
         }
 
         public static bool IsBossDrop(ItemDefinition item) => item != null && item.isBossDrop;

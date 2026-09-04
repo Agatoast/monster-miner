@@ -144,8 +144,18 @@ namespace MonsterMiner.Economy
             if (activeBuyStation != null && activeBuyStation.IsJarlLandShop)
             {
                 AddWeaponShopEntry(ctx, ctx.Database.pistolListing);
-                AddFixedPriceShopEntry(ctx, ctx.Database.grenadeListing);
+
+                if (activeBuyStation.IsQuarry3Shop)
+                    AddWeaponShopEntry(ctx, ctx.Database.shotgunListing);
             }
+
+            if (activeBuyStation != null && activeBuyStation.IsQuarry4Shop)
+            {
+                AddWeaponShopEntry(ctx, ctx.Database.shotgunListing);
+                AddWeaponShopEntry(ctx, ctx.Database.machinegunListing);
+            }
+
+            AddFixedPriceShopEntry(ctx, ctx.Database.grenadeListing);
         }
 
         void AddKnifeShopEntry(GameContext ctx)

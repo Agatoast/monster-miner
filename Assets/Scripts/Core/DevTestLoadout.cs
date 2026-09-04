@@ -10,9 +10,9 @@ namespace MonsterMiner.Core
     {
         public const bool Enabled = true;
         public const bool SpawnAsQuarry2CompleteWithMagicCompass = true;
+        public const bool SpawnWithArtilleryTrialWon = true;
         const int MaxInventorySlots = 7;
         const int MachineGunSlotIndex = 2;
-        const int MagicCompassSlotIndex = 1;
 
         public static void Apply(GameContext ctx)
         {
@@ -36,13 +36,26 @@ namespace MonsterMiner.Core
             if (SpawnAsQuarry2CompleteWithMagicCompass)
                 ApplyQuarry2CompleteWithMagicCompass(ctx);
 
+            if (SpawnWithArtilleryTrialWon)
+                ApplyArtilleryTrialWon(ctx);
+
             ctx.Inventory.SelectSlot(InventorySystem.PickaxeSlotIndex);
+        }
+
+        static void ApplyArtilleryTrialWon(GameContext ctx)
+        {
+            var progression = ctx.CaveProgression;
+            if (progression == null)
+                return;
+
+            progression.MarkSamuraiIntroHeard();
+            progression.CompleteQuarry3CompassReturn();
+            progression.CompleteArtilleryTrial();
         }
 
         static void ApplyQuarry2CompleteWithMagicCompass(GameContext ctx)
         {
             ctx.CaveProgression?.CompleteJarlSkullQuest();
-            AssignSlot(ctx.Inventory, MagicCompassSlotIndex, ctx.Database.magicCompassItem);
         }
 
         static void ClearNonPickaxeSlots(InventorySystem inventory)

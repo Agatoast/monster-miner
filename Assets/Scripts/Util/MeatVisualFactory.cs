@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using MonsterMiner.Data;
-using MonsterMiner.Inventory;
 using MonsterMiner.World;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -27,6 +26,29 @@ namespace MonsterMiner.Util
             { "rabbit_meat", "Models/Meat/16" },
             { "gremlin_meat", "Models/Meat/27" },
         };
+
+        static readonly string[] RandomDropMeshPaths =
+        {
+            "Models/Meat/1",
+            "Models/Meat/13",
+            "Models/Meat/16",
+            "Models/Meat/27",
+            "Models/Meat/32",
+            "Models/Meat/SushisSalmonFlat",
+            "Models/Meat/shabowykotlet",
+            "Models/Meat/meatraw",
+            "Models/Meat/meatcookedslice",
+        };
+
+        static readonly Dictionary<string, string> DropMeshTileIconByMeshPath = new()
+        {
+            { "Models/Meat/SushisSalmonFlat", "Textures/Meat/sushis" },
+            { "Models/Meat/shabowykotlet", "Textures/Meat/shabowykotlet" },
+            { "Models/Meat/meatraw", "Textures/Meat/meatraw" },
+            { "Models/Meat/meatcookedslice", "Textures/Meat/meatcooked" },
+        };
+
+        static readonly Dictionary<string, Texture2D> prefabAlbedoIconCache = new();
 
         readonly struct OpaqueBounds
         {
@@ -64,7 +86,7 @@ namespace MonsterMiner.Util
 
             int seed = Mathf.Abs((floorPoint * 1000f).GetHashCode() ^ (item.itemId?.GetHashCode() ?? 0));
 
-            if (InventorySystem.IsMonsterMeat(item))
+            if (ShouldUseImportedDropMesh(item))
             {
                 var imported = TryCreateImportedMeat(
                     item.displayName,
@@ -273,9 +295,7 @@ namespace MonsterMiner.Util
             if (item.isMiningGlove)
             {
                 boundsKey = "Textures/Inventory/Glove";
-                texture = ItemIconUtility.LoadIconWithTransparentBackground(
-                    boundsKey,
-                    ItemIconUtility.IconBackgroundKeyMode.Black);
+                texture = ItemIconUtility.LoadMiningGloveIcon(boundsKey);
                 if (texture != null)
                 {
                     bounds = GetOpaqueBoundsForTexture(boundsKey, texture);
@@ -326,12 +346,104 @@ namespace MonsterMiner.Util
             return linear * (world ? 1f : HeldDropScaleMultiplier) * DropVisualScaleMultiplier;
         }
 
+        static bool ShouldUseImportedDropMesh(ItemDefinition item) =>
+            item != null
+            && item.isMonsterDrop
+            && !item.isBossDrop
+            && !string.IsNullOrEmpty(ResolveMeatMeshPath(item));
+
         static string ResolveMeatMeshPath(ItemDefinition item)
         {
             if (item == null || string.IsNullOrEmpty(item.itemId))
                 return null;
 
-            return ImportedMeatMeshByItemId.TryGetValue(item.itemId, out var path) ? path : null;
+            if (ImportedMeatMeshByItemId.TryGetValue(item.itemId, out var mappedPath))
+                return mappedPath;
+
+            if (!item.isMonsterDrop || item.isBossDrop)
+                return null;
+
+            return PickRandomDropMeshPath(item.itemId);
+        }
+
+        static string PickRandomDropMeshPath(string itemId)
+        {
+            if (RandomDropMeshPaths == null || RandomDropMeshPaths.Length == 0)
+                return null;
+
+            int index = Mathf.Abs(itemId.GetHashCode()) % RandomDropMeshPaths.Length;
+            return RandomDropMeshPaths[index];
+        }
+
+        static bool UsesCreatureMeatTexture(ItemDefinition item) =>
+            item != null && ImportedMeatMeshByItemId.ContainsKey(item.itemId);
+
+        public static Texture2D GetDropTileIcon(ItemDefinition item)
+        {
+            if (item == null)
+                return null;
+
+            string meshPath = ResolveMeatMeshPath(item);
+            if (!string.IsNullOrEmpty(meshPath))
+            {
+                if (DropMeshTileIconByMeshPath.TryGetValue(meshPath, out string iconPath))
+                {
+                    var mapped = Resources.Load<Texture2D>(iconPath);
+                    if (mapped != null)
+                        return mapped;
+                }
+
+                var prefabAlbedo = TryGetPrefabAlbedoIcon(meshPath);
+                if (prefabAlbedo != null)
+                    return prefabAlbedo;
+            }
+
+            if (!string.IsNullOrEmpty(item.iconResourcePath))
+                return Resources.Load<Texture2D>(item.iconResourcePath);
+
+            return null;
+        }
+
+        static Texture2D TryGetPrefabAlbedoIcon(string meshPath)
+        {
+            if (string.IsNullOrEmpty(meshPath))
+                return null;
+
+            if (prefabAlbedoIconCache.TryGetValue(meshPath, out var cached))
+                return cached;
+
+            var prefab = Resources.Load<GameObject>(meshPath);
+            Texture2D albedo = null;
+            if (prefab != null)
+            {
+                foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
+                {
+                    albedo = ExtractAlbedoTexture(renderer.sharedMaterial);
+                    if (albedo != null)
+                        break;
+                }
+            }
+
+            prefabAlbedoIconCache[meshPath] = albedo;
+            return albedo;
+        }
+
+        static Texture2D ExtractAlbedoTexture(Material material)
+        {
+            if (material == null)
+                return null;
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                var tex = material.GetTexture("_BaseMap") as Texture2D;
+                if (tex != null)
+                    return tex;
+            }
+
+            if (material.HasProperty("_MainTex"))
+                return material.GetTexture("_MainTex") as Texture2D;
+
+            return null;
         }
 
         static GameObject TryCreateImportedMeat(
@@ -364,7 +476,7 @@ namespace MonsterMiner.Util
                 return null;
             }
 
-            ApplyImportedMeatMaterials(go, ResolveMeatTexturePath(item));
+            ApplyImportedMeatMaterials(go, ResolveMeatTexturePath(item), UsesCreatureMeatTexture(item));
             Quaternion onBack = GetOnBackRotation(go);
             go.transform.rotation = onBack;
             FitImportedMeatScale(go, GetBaseLinearScale(seed, world));
@@ -423,8 +535,14 @@ namespace MonsterMiner.Util
             return Quaternion.Euler(-90f, 0f, 0f);
         }
 
-        static void ApplyImportedMeatMaterials(GameObject root, string texturePath)
+        static void ApplyImportedMeatMaterials(GameObject root, string texturePath, bool useCreatureTexture)
         {
+            if (!useCreatureTexture)
+            {
+                KnifeVisualFactory.ApplyUrpMaterials(root);
+                return;
+            }
+
             var texture = Resources.Load<Texture2D>(texturePath);
             var template = Resources.Load<Material>("Materials/DefaultSurface");
             var urpLit = Shader.Find("Universal Render Pipeline/Lit");

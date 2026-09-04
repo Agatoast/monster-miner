@@ -1,4 +1,4 @@
-﻿using MonsterMiner.Core;
+using MonsterMiner.Core;
 using MonsterMiner.Economy;
 using MonsterMiner.Util;
 using UnityEngine;
@@ -199,6 +199,14 @@ namespace MonsterMiner.World
                 return;
 
             LandQuarry3Builder.Build(contentRoot, bounds);
+        }
+
+        public void BuildLandQuarry4(CavernBounds bounds)
+        {
+            if (contentRoot == null || bounds == null)
+                return;
+
+            LandQuarry4Builder.Build(contentRoot, bounds);
         }
 
         public void OpenCave2Passage()

@@ -20,7 +20,7 @@ namespace MonsterMiner.UI
                 return;
 
             DrawNorthCompass(player.ViewCamera);
-            if (ctx.Inventory != null && ctx.Inventory.HasMagicCompass())
+            if (ctx.CaveProgression != null && ctx.CaveProgression.HasMagicCompass)
                 DrawMagicCompass(player.ViewCamera, ctx, player.transform.position);
         }
 

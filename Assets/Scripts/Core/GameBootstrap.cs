@@ -1,4 +1,4 @@
-﻿using MonsterMiner.Combat;
+using MonsterMiner.Combat;
 using MonsterMiner.Core;
 using MonsterMiner.Economy;
 using MonsterMiner.Inventory;
@@ -23,6 +23,8 @@ namespace MonsterMiner.Core
 
         void Awake()
         {
+            Physics.queriesHitBackfaces = true;
+
             if (FindObjectsByType<GameBootstrap>(FindObjectsSortMode.None).Length > 1)
             {
                 Destroy(gameObject);
@@ -145,8 +147,42 @@ namespace MonsterMiner.Core
             ctx.PlayerSpawnPoint = spawn;
             if (ctx.Player != null)
             {
-                ctx.Player.Respawn(spawn);
-                if (ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2 && ctx.CavernBounds != null)
+                if (QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
+                {
+                    spawn = QuarryCatalog.ResolveQuarry4PlayerSpawnWorld(ctx.CavernBounds);
+                    ctx.PlayerSpawnPoint = spawn;
+                    ctx.Player.Respawn(spawn);
+                    ctx.Player.ResetViewPitch(0f);
+                }
+                else if (QuarryCatalog.SpawnPlayerAtQuarry3ForTesting)
+                {
+                    var guide = Object.FindFirstObjectByType<Quarry3QuestNpc>();
+                    if (guide != null && ctx.CavernBounds != null)
+                    {
+                        spawn = QuarryCatalog.ResolveQuarry3PlayerSpawnWorld(ctx.CavernBounds, guide.transform);
+                        ctx.PlayerSpawnPoint = spawn;
+                    }
+
+                    ctx.Player.Respawn(spawn);
+                    guide = guide != null ? guide : Object.FindFirstObjectByType<Quarry3QuestNpc>();
+                    if (guide != null)
+                    {
+                        Vector3 toGuide = guide.transform.position - ctx.Player.transform.position;
+                        toGuide.y = 0f;
+                        if (toGuide.sqrMagnitude > 0.01f)
+                            ctx.Player.transform.rotation = Quaternion.LookRotation(toGuide.normalized, Vector3.up);
+                    }
+
+                    ctx.Player.ResetViewPitch(0f);
+                }
+                else
+                {
+                    ctx.Player.Respawn(spawn);
+                }
+
+                if (!QuarryCatalog.SpawnPlayerAtQuarry3ForTesting
+                    && !QuarryCatalog.SpawnPlayerAtQuarry4ForTesting
+                    && ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2 && ctx.CavernBounds != null)
                 {
                     Vector3 boatLocal = LakeCatalog.GetBoatBeachContentLocal(
                         WorldScale.Feet(0.12f),
@@ -172,6 +208,7 @@ namespace MonsterMiner.Core
             DevTestLoadout.Apply(ctx);
 
             yield return null;
+            ctx.Player?.ResetViewPitch(0f);
             EnsureTruckRenderersEnabled(ctx.PlayerTruck);
         }
 
@@ -192,6 +229,12 @@ namespace MonsterMiner.Core
             if (ctx?.CavernBounds == null)
                 return;
 
+            if (QuarryCatalog.SpawnPlayerAtQuarry3ForTesting || QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
+                ctx.CaveProgression?.CompleteJarlSkullQuest();
+
+            if (QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
+                ctx.CaveProgression?.UnlockLandQuarry4();
+
             if (!TryResolveLandTruckStart(ctx.CavernBounds, out var truckPoint, out var truckRotation, out _))
                 return;
 
@@ -208,7 +251,9 @@ namespace MonsterMiner.Core
             ctx.PlayerSpawnPoint = QuarryCatalog.ResolveHallFrontSpawnWorld(ctx.CavernBounds);
             if (ctx.CaveProgression != null && ctx.CaveProgression.HasLandQuarry2
                 && !QuarryCatalog.SpawnPlayerOnIslandForTesting
-                && !QuarryCatalog.SpawnPlayerAtJarlLandShopForTesting)
+                && !QuarryCatalog.SpawnPlayerAtJarlLandShopForTesting
+                && !QuarryCatalog.SpawnPlayerAtQuarry3ForTesting
+                && !QuarryCatalog.SpawnPlayerAtQuarry4ForTesting)
             {
                 ctx.PlayerSpawnPoint = LakeCatalog.ResolveBoatSandSpawnWorld(
                     ctx.CavernBounds,

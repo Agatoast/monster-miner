@@ -96,9 +96,10 @@ namespace MonsterMiner.Player
             if (string.IsNullOrEmpty(weaponId) || !RangedWeaponStats.TryGetConfig(weaponId, out var config))
                 return false;
 
-            bool wantsFire = InventorySystem.ResolveBaseWeaponId(weaponId) == "machinegun"
-                ? Input.GetMouseButtonDown(0)
-                : Input.GetMouseButton(0);
+            bool isMachineGun = InventorySystem.ResolveBaseWeaponId(weaponId) == "machinegun";
+            bool wantsFire = isMachineGun
+                ? Input.GetMouseButton(0)
+                : Input.GetMouseButtonDown(0);
 
             if (!wantsFire)
                 return false;

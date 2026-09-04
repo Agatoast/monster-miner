@@ -19,7 +19,9 @@ namespace MonsterMiner.World
             if (bounds.IsInCave2ZoneLocal(localX, localZ))
                 return true;
 
-            return QuarryCatalog.IsLandQuarry2Local(localX, localZ);
+            return QuarryCatalog.IsLandQuarry2Local(localX, localZ)
+                || QuarryCatalog.IsLandQuarry3Local(localX, localZ)
+                || QuarryCatalog.IsLandQuarry4Local(localX, localZ);
         }
 
         public static bool IsLandLocal(CavernBounds bounds, float localX, float localZ)

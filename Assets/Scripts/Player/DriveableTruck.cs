@@ -239,8 +239,39 @@ namespace MonsterMiner.Player
             }
 
             Vector3 flatForward = transform.forward * forwardSpeed;
-            rb.linearVelocity = new Vector3(flatForward.x, 0f, flatForward.z);
+            Vector3 velocity = BlockRockCollisionVelocity(new Vector3(flatForward.x, 0f, flatForward.z));
+            rb.linearVelocity = velocity;
             StickToPlainsGround();
+        }
+
+        Vector3 BlockRockCollisionVelocity(Vector3 velocity)
+        {
+            if (velocity.sqrMagnitude < 0.01f)
+                return velocity;
+
+            var box = GetComponent<BoxCollider>();
+            if (box == null)
+                return velocity;
+
+            Vector3 center = transform.TransformPoint(box.center);
+            Vector3 halfExtents = Vector3.Scale(box.size, transform.lossyScale) * 0.5f;
+            Vector3 direction = velocity.normalized;
+            float distance = velocity.magnitude * Time.fixedDeltaTime + 0.08f;
+            if (Physics.BoxCast(
+                    center,
+                    halfExtents,
+                    direction,
+                    out RaycastHit hit,
+                    transform.rotation,
+                    distance,
+                    ~0,
+                    QueryTriggerInteraction.Ignore)
+                && TruckObstacleUtility.TryGetRock(hit.collider, out _))
+            {
+                return Vector3.zero;
+            }
+
+            return velocity;
         }
 
         void StickToPlainsGround()

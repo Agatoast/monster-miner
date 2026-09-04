@@ -1,3 +1,4 @@
+using MonsterMiner.Artillery;
 using MonsterMiner.Core;
 using MonsterMiner.UI;
 using MonsterMiner.Util;
@@ -29,6 +30,8 @@ namespace MonsterMiner.Player
         bool gameplayCursorLocked = true;
         bool jumpRequested;
         float plainsJumpVelocity;
+        int lookWarmupFrames;
+        const int LookWarmupFrameCount = 8;
 
         public Camera ViewCamera => viewCamera;
         public Transform Head => head;
@@ -45,7 +48,6 @@ namespace MonsterMiner.Player
             rb.constraints = RigidbodyConstraints.FreezeRotation;
             transform.position = SnapToFloor(spawnPoint);
             transform.rotation = Quaternion.identity;
-            pitch = 0f;
 
             head = new GameObject("Head").transform;
             head.SetParent(transform, false);
@@ -62,6 +64,7 @@ namespace MonsterMiner.Player
             var listener = camGo.AddComponent<AudioListener>();
             DisableExtraAudioListeners(listener);
 
+            ResetViewPitch(0f);
             LockCursorToCenter();
         }
 
@@ -143,6 +146,8 @@ namespace MonsterMiner.Player
         {
             gameplayCursorLocked = true;
             ApplyCursorState();
+            Input.ResetInputAxes();
+            lookWarmupFrames = LookWarmupFrameCount;
         }
 
         static bool IsShopMenuOpen()
@@ -155,11 +160,16 @@ namespace MonsterMiner.Player
             return IsShopMenuOpen()
                 || SellConfirmationDisplay.IsActive
                 || MinerTurnInPopupDisplay.IsActive
-                || DeathScreenDisplay.IsActive;
+                || DeathScreenDisplay.IsActive
+                || ArtilleryPauseDisplay.IsOpen
+                || MainMenuDisplay.IsActive;
         }
 
         public static bool IsGameplayBlocked()
         {
+            if (ArtillerySession.IsActive || MainMenuDisplay.IsActive)
+                return true;
+
             var ctx = GameContext.Instance;
             return ctx != null
                 && (ctx.IsPlayerDead
@@ -194,6 +204,10 @@ namespace MonsterMiner.Player
             var move = transform.TransformDirection(input) * WorldScale.MilesPerHour(moveSpeedMph);
             var cavernBounds = GameContext.Instance?.CavernBounds;
             bool onPlains = cavernBounds != null && PlainsGroundSupport.IsOnPlains(cavernBounds, transform.position);
+            Vector3 local = cavernBounds != null
+                ? cavernBounds.transform.InverseTransformPoint(transform.position)
+                : Vector3.zero;
+            bool inCave = cavernBounds != null && cavernBounds.IsInCave2ZoneLocal(local.x, local.z);
 
             if (onPlains)
             {
@@ -220,9 +234,32 @@ namespace MonsterMiner.Player
 
             plainsJumpVelocity = 0f;
             rb.useGravity = true;
+
+            Vector3 horizontalStep = new Vector3(move.x, 0f, move.z) * Time.fixedDeltaTime;
+            if (!inCave)
+            {
+                Vector3 pos = rb.position;
+                if (bodyCollider != null && horizontalStep.sqrMagnitude > 0.0001f)
+                    pos = PlainsMovementCollision.ResolvePosition(transform, bodyCollider, rb, pos, horizontalStep);
+                else
+                    pos += horizontalStep;
+
+                rb.position = pos;
+                transform.position = pos;
+                Physics.SyncTransforms();
+            }
+
             var velocity = rb.linearVelocity;
-            velocity.x = move.x;
-            velocity.z = move.z;
+            if (inCave)
+            {
+                velocity.x = move.x;
+                velocity.z = move.z;
+            }
+            else
+            {
+                velocity.x = 0f;
+                velocity.z = 0f;
+            }
 
             if (jumpRequested && IsGrounded())
             {
@@ -248,6 +285,24 @@ namespace MonsterMiner.Player
         {
             if (head == null || IsUiCursorMode() || !gameplayCursorLocked || Cursor.lockState != CursorLockMode.Locked)
                 return;
+
+            if (IsGameplayBlocked())
+            {
+                pitch = 0f;
+                viewRecoilKick = 0f;
+                ApplyHeadRotation();
+                return;
+            }
+
+            if (lookWarmupFrames > 0)
+            {
+                lookWarmupFrames--;
+                pitch = 0f;
+                viewRecoilKick = 0f;
+                Input.ResetInputAxes();
+                ApplyHeadRotation();
+                return;
+            }
 
             var mount = GetComponent<PlayerVehicleMount>();
             if (mount != null && mount.IsDrivingBoat)
@@ -360,6 +415,8 @@ namespace MonsterMiner.Player
         {
             pitch = newPitch;
             viewRecoilKick = 0f;
+            lookWarmupFrames = LookWarmupFrameCount;
+            Input.ResetInputAxes();
             ApplyHeadRotation();
         }
 
@@ -379,8 +436,7 @@ namespace MonsterMiner.Player
             rb.angularVelocity = Vector3.zero;
             transform.position = SnapToFloor(spawnPoint);
             transform.rotation = Quaternion.identity;
-            pitch = 0f;
-            viewRecoilKick = 0f;
+            ResetViewPitch(0f);
             if (head != null)
                 head.localRotation = Quaternion.identity;
             LockCursorToCenter();
@@ -437,35 +493,14 @@ namespace MonsterMiner.Player
 
         void TryMoveOnPlains(Vector3 step)
         {
-            Vector3 target = rb.position + step;
-            if (bodyCollider == null)
-            {
-                rb.MovePosition(target);
-                return;
-            }
-
-            float scaleY = Mathf.Abs(transform.lossyScale.y);
-            float radius = bodyCollider.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z));
-            float height = bodyCollider.height * scaleY;
-            float half = height * 0.5f;
-            Vector3 up = transform.up;
-            Vector3 point1 = rb.position + up * (half - radius);
-            Vector3 point2 = rb.position - up * (half - radius);
-
-            if (Physics.CapsuleCast(
-                    point1,
-                    point2,
-                    radius,
-                    step.normalized,
-                    out var hit,
-                    step.magnitude,
-                    ~0,
-                    QueryTriggerInteraction.Ignore)
-                && !hit.collider.isTrigger)
-            {
-                target = rb.position + step.normalized * Mathf.Max(0f, hit.distance - 0.02f);
-            }
-
+            Vector3 target = bodyCollider == null
+                ? rb.position + step
+                : PlainsMovementCollision.ResolvePosition(
+                    transform,
+                    bodyCollider,
+                    rb,
+                    rb.position,
+                    step);
             rb.MovePosition(target);
         }
     }

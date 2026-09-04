@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using MonsterMiner.Core;
 using MonsterMiner.Util;
 using UnityEngine;
 
@@ -83,6 +84,22 @@ namespace MonsterMiner.World
                 MinZ = minZ,
                 MaxZ = maxZ
             });
+        }
+
+        public bool IsSpawnExcludedLocal(float localX, float localZ, float margin = 0f) =>
+            IsInSpawnExclusionLocal(localX, localZ, margin);
+
+        public void ClearSpawnExclusionsNear(float centerX, float centerZ, float radius)
+        {
+            float radiusSquared = radius * radius;
+            for (int i = spawnExclusions.Count - 1; i >= 0; i--)
+            {
+                var zone = spawnExclusions[i];
+                float zoneCenterX = (zone.MinX + zone.MaxX) * 0.5f;
+                float zoneCenterZ = (zone.MinZ + zone.MaxZ) * 0.5f;
+                if (Vector2.SqrMagnitude(new Vector2(zoneCenterX - centerX, zoneCenterZ - centerZ)) <= radiusSquared)
+                    spawnExclusions.RemoveAt(i);
+            }
         }
 
         public void SetSalesmanEggSpawnExclusion(float localX, float localZ, float radiusFeet)
@@ -251,6 +268,107 @@ namespace MonsterMiner.World
             return false;
         }
 
+        public bool TryGetRandomClearLandQuarry3Point(
+            float clearanceRadius,
+            int maxAttempts,
+            out Vector3 point,
+            float contentHorizontalRadius = 0f,
+            bool forEggSpawn = false)
+        {
+            if (GameContext.Instance?.CaveProgression == null || !GameContext.Instance.CaveProgression.HasLandQuarry3)
+            {
+                point = default;
+                return false;
+            }
+
+            var center = QuarryCatalog.GetLandQuarry3Center();
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                float angle = Random.Range(0f, Mathf.PI * 2f);
+                float edge = LandQuarry3Boundary.SampleEdgeDistance(angle);
+                float minDistance = WorldScale.Feet(24f) + contentHorizontalRadius;
+                float maxDistance = edge - WorldScale.Feet(8f) - contentHorizontalRadius;
+                if (maxDistance <= minDistance)
+                    continue;
+
+                float distance = Random.Range(minDistance, maxDistance);
+                float localX = center.x + Mathf.Cos(angle) * distance;
+                float localZ = center.y + Mathf.Sin(angle) * distance;
+
+                if (!LandQuarry3Boundary.ContainsLocal(localX, localZ))
+                    continue;
+
+                if (IsInSpawnExclusionLocal(localX, localZ))
+                    continue;
+
+                if (forEggSpawn && IsTooCloseToSalesmanForEggs(localX, localZ))
+                    continue;
+
+                if (!TryResolveFloorWorldPoint(localX, localZ, out var floorPoint))
+                    continue;
+
+                if (!IsClearForSpawn(floorPoint, clearanceRadius))
+                    continue;
+
+                point = floorPoint;
+                return true;
+            }
+
+            point = default;
+            return false;
+        }
+
+        public bool TryGetRandomClearLandQuarry4Point(
+            float clearanceRadius,
+            int maxAttempts,
+            out Vector3 point,
+            float contentHorizontalRadius = 0f,
+            bool forEggSpawn = false)
+        {
+            if (GameContext.Instance?.CaveProgression == null || !GameContext.Instance.CaveProgression.HasLandQuarry4)
+            {
+                point = default;
+                return false;
+            }
+
+            var center = QuarryCatalog.GetLandQuarry4Center();
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                float angle = Random.Range(0f, Mathf.PI * 2f);
+                float edge = LandQuarry4Boundary.SampleEdgeDistance(angle);
+                float minDistance = WorldScale.Feet(24f) + contentHorizontalRadius;
+                float maxDistance = edge - WorldScale.Feet(8f) - contentHorizontalRadius;
+                if (maxDistance <= minDistance)
+                    continue;
+
+                float distance = Random.Range(minDistance, maxDistance);
+                float localX = center.x + Mathf.Cos(angle) * distance;
+                float localZ = center.y + Mathf.Sin(angle) * distance;
+
+                if (!LandQuarry4Boundary.ContainsLocal(localX, localZ))
+                    continue;
+
+                float exclusionMargin = forEggSpawn ? contentHorizontalRadius : 0f;
+                if (IsInSpawnExclusionLocal(localX, localZ, exclusionMargin))
+                    continue;
+
+                if (forEggSpawn && IsTooCloseToSalesmanForEggs(localX, localZ))
+                    continue;
+
+                if (!TryResolveFloorWorldPoint(localX, localZ, out var floorPoint))
+                    continue;
+
+                if (!IsClearForSpawn(floorPoint, clearanceRadius))
+                    continue;
+
+                point = floorPoint;
+                return true;
+            }
+
+            point = default;
+            return false;
+        }
+
         public Vector3 GetRandomEdgeFloorPoint(float insetFromWallMin, float insetFromWallMax, float contentHorizontalRadius = 0f)
         {
             for (int attempt = 0; attempt < 48; attempt++)
@@ -343,6 +461,12 @@ namespace MonsterMiner.World
             if (QuarryCatalog.IsLandQuarry2Local(localX, localZ))
                 return true;
 
+            if (QuarryCatalog.IsLandQuarry3Local(localX, localZ))
+                return true;
+
+            if (QuarryCatalog.IsLandQuarry4Local(localX, localZ))
+                return true;
+
             if (LakeCatalog.IsBeachLocal(localX, localZ))
                 return true;
 
@@ -394,15 +518,15 @@ namespace MonsterMiner.World
             return true;
         }
 
-        bool IsInSpawnExclusionLocal(float localX, float localZ)
+        bool IsInSpawnExclusionLocal(float localX, float localZ, float margin = 0f)
         {
             for (int i = 0; i < spawnExclusions.Count; i++)
             {
                 var zone = spawnExclusions[i];
-                if (localX >= zone.MinX
-                    && localX <= zone.MaxX
-                    && localZ >= zone.MinZ
-                    && localZ <= zone.MaxZ)
+                if (localX >= zone.MinX - margin
+                    && localX <= zone.MaxX + margin
+                    && localZ >= zone.MinZ - margin
+                    && localZ <= zone.MaxZ + margin)
                     return true;
             }
 

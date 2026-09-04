@@ -103,7 +103,7 @@ namespace MonsterMiner.World
                     || name == "AngelWings" || name == "EquippedAngelWings" || name == "PlainsWorld"
                     || name == "PlainsGround" || name == "PlainsGroundCollision"
                     || name == "PlainsTreeCopses" || name == "PlainsRocks" || name == "CliffWalls"
-                    || name == "PlateauCliffWalls" || name == "PlayerTruck" || name == "JarlLand" || name == "LandQuarry2" || name == "LandQuarry3"
+                    || name == "PlateauCliffWalls" || name == "PlayerTruck" || name == "JarlLand" || name == "LandQuarry2" || name == "LandQuarry3" || name == "LandQuarry4"
                     || name == "WarrensonsLake" || name == "LakeWater" || name == "LakeBeach" || name == "LakeIsland" || name == "BoatAnchor" || name == "WarrensonsBoat" || name == "Warrenson")
                     return true;
                 if (name.StartsWith("PlainsGroundCollider_") || name.StartsWith("Tree_") || name.StartsWith("Copse_")
